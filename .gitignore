@@ -1,0 +1,24 @@
+src/site/markdown/api-swagger.md
+src/site/resources/swagger.json
+target/
+.project
+.classpath
+.settings/
+.svn/**/*
+.svn
+.springBeans
+bin/
+
+data/
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+generated
