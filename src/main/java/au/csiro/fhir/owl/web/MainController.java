@@ -6,11 +6,14 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.hl7.fhir.dstu3.model.BooleanType;
 import org.hl7.fhir.dstu3.model.CodeSystem;
 import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemHierarchyMeaning;
 import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionComponent;
@@ -160,18 +163,31 @@ public class MainController {
                 
                 // Populate basic code system info
                 final CodeSystem cs = new CodeSystem();
+                cs.setId("hpo");
                 cs.setUrl(codeSystemUrl);
                 cs.setVersion(codeSystemVersion);
                 cs.setName(codeSystemName);
                 if(publisher != null) cs.setPublisher(publisher);
                 if(description != null) cs.setDescription(description);
                 cs.setStatus(ConformanceResourceStatus.ACTIVE);
+                cs.setValueSet("http://purl.obolibrary.org/obo/hp.owl");
                 cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.SUBSUMES);
                 
                 PropertyComponent parentProp = cs.addProperty();
                 parentProp.setCode("parent");
                 parentProp.setType(PropertyType.STRING);
                 parentProp.setDescription("Parent codes.");
+                
+                PropertyComponent rootProp = cs.addProperty();
+                rootProp.setCode("root");
+                rootProp.setType(PropertyType.BOOLEAN);
+                rootProp.setDescription("Indicates if this concept is a root concept (i.e. Thing is equivalent or a "
+                        + "direct parent)");
+                
+                PropertyComponent depProp = cs.addProperty();
+                depProp.setCode("deprecated");
+                depProp.setType(PropertyType.BOOLEAN);
+                depProp.setDescription("Indicates if this concept is deprecated.");
             
                 // Now classify the ontology
                 OWLReasonerFactory reasonerFactory = new ElkReasonerFactory();
@@ -181,86 +197,132 @@ public class MainController {
                 reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY);
                     
                 if(log.isDebugEnabled()) log.debug("Visiting nodes");
-                ont.accept(new OWLNamedObjectVisitor() {
-        
-                    @Override
-                    public void visit(OWLClass owlClass) {
+                
+                final Set<String> processedConcepts = new HashSet<>();
+                
+                for(OWLOntology o : manager.getImportsClosure(ont)) {
+                    if(log.isDebugEnabled()) log.debug("Visiting ontology " + o.toString());
+                    o.accept(new OWLNamedObjectVisitor() {
                         
-                        ConceptDefinitionComponent cdc = cs.addConcept();
-                        cdc.setCode(owlClass.getIRI().toString());
-                        
-                        // Add preferred term and synonyms
-                        for(OWLAnnotation ann : getAnnotationObjects(owlClass, ont)) {
-                            OWLAnnotationProperty prop = ann.getProperty();
-                            if(prop != null && prop.getIRI().getShortForm().equals("label")) {
-                                OWLAnnotationValue val = ann.getValue();
-                                if(val != null) {
-                                    Optional<OWLLiteral> lit = val.asLiteral();
-                                    if(lit.isPresent()) {
-                                        String label = lit.get().getLiteral();
-                                        // This is the preferred term
-                                        cdc.setDisplay(label);
+                        @Override
+                        public void visit(OWLClass owlClass) {
+                            
+                            ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();//cs.addConcept();
+                            cdc.setCode(owlClass.getIRI().toString());
+                            
+                            boolean isDeprecated = false;
+                            // Add preferred term and synonyms
+                            for(OWLAnnotation ann : getAnnotationObjects(owlClass, ont)) {
+                                OWLAnnotationProperty prop = ann.getProperty();
+                                if(prop != null && prop.getIRI().getShortForm().equals("label")) {
+                                    OWLAnnotationValue val = ann.getValue();
+                                    if(val != null) {
+                                        Optional<OWLLiteral> lit = val.asLiteral();
+                                        if(lit.isPresent()) {
+                                            String label = lit.get().getLiteral();
+                                            // This is the preferred term
+                                            cdc.setDisplay(label);
+                                        }
                                     }
-                                }
-                            } else if(prop != null && prop.getIRI().getShortForm().equals("hasExactSynonym")) {
-                                // This is an oboInOwl extension TODO review
-                                OWLAnnotationValue val = ann.getValue();
-                                if(val != null) {
-                                    Optional<OWLLiteral> lit = val.asLiteral();
-                                    if(lit.isPresent()) {
-                                        String label = lit.get().getLiteral();
-                                        // This is a synonym - but we don't know the language
-                                        ConceptDefinitionDesignationComponent cddc = cdc.addDesignation();
-                                        cddc.setValue(label);
-                                        cddc.setUse(new Coding("http://snomed.info/sct", "900000000000013009", 
-                                                "Synonym (core metadata concept)"));
+                                } else if(prop != null && prop.getIRI().getShortForm().equals("hasExactSynonym")) {
+                                    // This is an oboInOwl extension TODO review
+                                    OWLAnnotationValue val = ann.getValue();
+                                    if(val != null) {
+                                        Optional<OWLLiteral> lit = val.asLiteral();
+                                        if(lit.isPresent()) {
+                                            String label = lit.get().getLiteral();
+                                            // This is a synonym - but we don't know the language
+                                            ConceptDefinitionDesignationComponent cddc = cdc.addDesignation();
+                                            cddc.setValue(label);
+                                            cddc.setUse(new Coding("http://snomed.info/sct", "900000000000013009", 
+                                                    "Synonym (core metadata concept)"));
+                                        }
+                                    }
+                                } else if(prop != null && prop.getIRI().getShortForm().equals("deprecated")) {
+                                    OWLAnnotationValue val = ann.getValue();
+                                    if(val != null) {
+                                        Optional<OWLLiteral> lit = val.asLiteral();
+                                        if(lit.isPresent()) {
+                                            isDeprecated = lit.get().parseBoolean();
+                                        }
                                     }
                                 }
                             }
+                            
+                            // Only add this concept if it has a label - if it doesn't then skip because it will be 
+                            // added when the imported ontology that contains it is processed.
+                            if(cdc.hasDisplay() && !processedConcepts.contains(cdc.getCode())) {
+                                processedConcepts.add(cdc.getCode());
+                                cs.addConcept(cdc);                       
+                            } else {
+                                return;
+                            }
+                            
+                            boolean isRoot = false;
+                            
+                            // Add hierarchy-related fields
+                            for(Node<OWLClass> parent : reasoner.getSuperClasses(owlClass, true)) {
+                                for(OWLClass ent : parent.getEntities()) {
+                                    if(ent.isOWLThing()){
+                                        isRoot = true;
+                                        continue;
+                                    }
+                                    if(ent.isOWLNothing()) continue;
+                                    ConceptPropertyComponent prop = cdc.addProperty();
+                                    prop.setCode("parent");
+                                    prop.setValue(new StringType(ent.getIRI().toString()));
+                                }
+                            }
+                            // Check if this concept is equivalent to Thing - in this case it is a root
+                            for(OWLClass eq : reasoner.getEquivalentClasses(owlClass)) {
+                                if(eq.isOWLThing()){
+                                    isRoot = true;
+                                    break;
+                                }
+                            }
+                            
+                            ConceptPropertyComponent prop = cdc.addProperty();
+                            prop.setCode("root");
+                            prop.setValue(new BooleanType(isRoot));
+                            
+                            prop = cdc.addProperty();
+                            prop.setCode("deprecated");
+                            prop.setValue(new BooleanType(isDeprecated));
                         }
-                        // Add hierarchy-related fields
-                        for(Node<OWLClass> parent : reasoner.getSuperClasses(owlClass, true)) {
-                            for(OWLClass ent : parent.getEntities()) {
-                                if(ent.isOWLThing() || ent.isOWLNothing()) continue;
-                                ConceptPropertyComponent prop = cdc.addProperty();
-                                prop.setCode("parent");
-                                prop.setValue(new StringType(ent.getIRI().toString()));
+            
+                        @Override
+                        public void visit(OWLObjectProperty property) {
+                            // nothing to do - we do not index properties for now
+                        }
+            
+                        @Override
+                        public void visit(OWLDataProperty property) {
+                            // nothing to do - we do not index data properties for now
+                        }
+            
+                        @Override
+                        public void visit(OWLNamedIndividual owlIndividual) {
+                            // nothing to do - we do not index individuals for now
+                        }
+            
+                        @Override
+                        public void visit(OWLOntology ontology) {
+                            for(OWLClass owlClass : ontology.getClassesInSignature(Imports.INCLUDED)) {
+                                visit(owlClass);
                             }
                         }
-                    }
-        
-                    @Override
-                    public void visit(OWLObjectProperty property) {
-                        // nothing to do - we do not index properties for now
-                    }
-        
-                    @Override
-                    public void visit(OWLDataProperty property) {
-                        // nothing to do - we do not index data properties for now
-                    }
-        
-                    @Override
-                    public void visit(OWLNamedIndividual owlIndividual) {
-                        // nothing to do - we do not index individuals for now
-                    }
-        
-                    @Override
-                    public void visit(OWLOntology ontology) {
-                        for(OWLClass owlClass : ontology.getClassesInSignature(Imports.INCLUDED)) {
-                            visit(owlClass);
+            
+                        @Override
+                        public void visit(OWLDatatype datatype) {
+                            // nothing to do - we do not index data types for now
                         }
-                    }
-        
-                    @Override
-                    public void visit(OWLDatatype datatype) {
-                        // nothing to do - we do not index data types for now
-                    }
-        
-                    @Override
-                    public void visit(OWLAnnotationProperty property) {
-                        // TODO need to deal with these to produce concept maps
-                    }
-                });
+            
+                        @Override
+                        public void visit(OWLAnnotationProperty property) {
+                            // TODO need to deal with these to produce concept maps
+                        }
+                    });
+                }
 
                 JsonParser jp = (JsonParser) fhirContext.newJsonParser();
                 return new ResponseEntity<String>(jp.encodeResourceToString(cs), HttpStatus.OK);
