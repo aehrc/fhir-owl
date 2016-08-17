@@ -178,6 +178,16 @@ public class MainController {
                 parentProp.setType(PropertyType.STRING);
                 parentProp.setDescription("Parent codes.");
                 
+                PropertyComponent ancestorProp = cs.addProperty();
+                ancestorProp.setCode("ancestor");
+                ancestorProp.setType(PropertyType.STRING);
+                ancestorProp.setDescription("Ancestor codes.");
+                
+                PropertyComponent childProp = cs.addProperty();
+                childProp.setCode("child");
+                childProp.setType(PropertyType.STRING);
+                childProp.setDescription("Child codes.");
+                
                 PropertyComponent rootProp = cs.addProperty();
                 rootProp.setCode("root");
                 rootProp.setType(PropertyType.BOOLEAN);
@@ -201,7 +211,7 @@ public class MainController {
                 final Set<String> processedConcepts = new HashSet<>();
                 
                 for(OWLOntology o : manager.getImportsClosure(ont)) {
-                    if(log.isDebugEnabled()) log.debug("Visiting ontology " + o.toString());
+                    if(log.isInfoEnabled()) log.info("Visiting ontology " + o.toString());
                     o.accept(new OWLNamedObjectVisitor() {
                         
                         @Override
@@ -212,7 +222,7 @@ public class MainController {
                             
                             boolean isDeprecated = false;
                             // Add preferred term and synonyms
-                            for(OWLAnnotation ann : getAnnotationObjects(owlClass, ont)) {
+                            for(OWLAnnotation ann : getAnnotationObjects(owlClass, o)) {
                                 OWLAnnotationProperty prop = ann.getProperty();
                                 if(prop != null && prop.getIRI().getShortForm().equals("label")) {
                                     OWLAnnotationValue val = ann.getValue();
@@ -273,6 +283,23 @@ public class MainController {
                                     prop.setValue(new StringType(ent.getIRI().toString()));
                                 }
                             }
+                            for(Node<OWLClass> parent : reasoner.getSuperClasses(owlClass, false)) {
+                                for(OWLClass ent : parent.getEntities()) {
+                                    if(ent.isOWLThing() || ent.isOWLNothing()) continue;
+                                    ConceptPropertyComponent prop = cdc.addProperty();
+                                    prop.setCode("ancestor");
+                                    prop.setValue(new StringType(ent.getIRI().toString()));
+                                }
+                            }
+                            for(Node<OWLClass> child : reasoner.getSubClasses(owlClass, true)) {
+                                for(OWLClass ent : child.getEntities()) {
+                                    if(ent.isOWLThing() || ent.isOWLNothing()) continue;
+                                    ConceptPropertyComponent prop = cdc.addProperty();
+                                    prop.setCode("child");
+                                    prop.setValue(new StringType(ent.getIRI().toString()));
+                                }
+                            }
+                            
                             // Check if this concept is equivalent to Thing - in this case it is a root
                             for(OWLClass eq : reasoner.getEquivalentClasses(owlClass)) {
                                 if(eq.isOWLThing()){
