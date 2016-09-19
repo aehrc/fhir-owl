@@ -1,7 +1,5 @@
 package au.csiro.fhir.owl.web;
 
-import static org.semanticweb.owlapi.search.EntitySearcher.getAnnotationObjects;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -21,9 +19,9 @@ import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionDesignationComponent
 import org.hl7.fhir.dstu3.model.CodeSystem.ConceptPropertyComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.PropertyComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.PropertyType;
+import org.hl7.fhir.dstu3.model.CodeType;
 import org.hl7.fhir.dstu3.model.Coding;
 import org.hl7.fhir.dstu3.model.Enumerations.ConformanceResourceStatus;
-import org.hl7.fhir.dstu3.model.StringType;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.IRI;
@@ -31,6 +29,7 @@ import org.semanticweb.owlapi.model.OWLAnnotation;
 import org.semanticweb.owlapi.model.OWLAnnotationProperty;
 import org.semanticweb.owlapi.model.OWLAnnotationValue;
 import org.semanticweb.owlapi.model.OWLClass;
+import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLDataProperty;
 import org.semanticweb.owlapi.model.OWLDatatype;
 import org.semanticweb.owlapi.model.OWLLiteral;
@@ -46,6 +45,7 @@ import org.semanticweb.owlapi.reasoner.InferenceType;
 import org.semanticweb.owlapi.reasoner.Node;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
 import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
+import org.semanticweb.owlapi.search.EntitySearcher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -92,6 +92,7 @@ public class MainController {
                 
                 OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
                 final OWLOntology ont;
+                final OWLDataFactory factory = OWLManager.getOWLDataFactory();
                 
                 try {
                     ont = manager.loadOntologyFromOntologyDocument(new ByteArrayInputStream(bytes));
@@ -175,18 +176,8 @@ public class MainController {
                 
                 PropertyComponent parentProp = cs.addProperty();
                 parentProp.setCode("parent");
-                parentProp.setType(PropertyType.STRING);
+                parentProp.setType(PropertyType.CODE);
                 parentProp.setDescription("Parent codes.");
-                
-                PropertyComponent ancestorProp = cs.addProperty();
-                ancestorProp.setCode("ancestor");
-                ancestorProp.setType(PropertyType.STRING);
-                ancestorProp.setDescription("Ancestor codes.");
-                
-                PropertyComponent childProp = cs.addProperty();
-                childProp.setCode("child");
-                childProp.setType(PropertyType.STRING);
-                childProp.setDescription("Child codes.");
                 
                 PropertyComponent rootProp = cs.addProperty();
                 rootProp.setCode("root");
@@ -208,115 +199,50 @@ public class MainController {
                     
                 if(log.isDebugEnabled()) log.debug("Visiting nodes");
                 
+                final Set<String> conceptsWithNoLabel = new HashSet<>();
                 final Set<String> processedConcepts = new HashSet<>();
                 
                 for(OWLOntology o : manager.getImportsClosure(ont)) {
                     if(log.isInfoEnabled()) log.info("Visiting ontology " + o.toString());
+                    
                     o.accept(new OWLNamedObjectVisitor() {
                         
                         @Override
                         public void visit(OWLClass owlClass) {
-                            
-                            ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();//cs.addConcept();
-                            cdc.setCode(owlClass.getIRI().toString());
-                            
-                            boolean isDeprecated = false;
-                            // Add preferred term and synonyms
-                            for(OWLAnnotation ann : getAnnotationObjects(owlClass, o)) {
-                                OWLAnnotationProperty prop = ann.getProperty();
-                                if(prop != null && prop.getIRI().getShortForm().equals("label")) {
-                                    OWLAnnotationValue val = ann.getValue();
-                                    if(val != null) {
-                                        Optional<OWLLiteral> lit = val.asLiteral();
-                                        if(lit.isPresent()) {
-                                            String label = lit.get().getLiteral();
-                                            // This is the preferred term
-                                            cdc.setDisplay(label);
-                                        }
-                                    }
-                                } else if(prop != null && prop.getIRI().getShortForm().equals("hasExactSynonym")) {
-                                    // This is an oboInOwl extension TODO review
-                                    OWLAnnotationValue val = ann.getValue();
-                                    if(val != null) {
-                                        Optional<OWLLiteral> lit = val.asLiteral();
-                                        if(lit.isPresent()) {
-                                            String label = lit.get().getLiteral();
-                                            // This is a synonym - but we don't know the language
-                                            ConceptDefinitionDesignationComponent cddc = cdc.addDesignation();
-                                            cddc.setValue(label);
-                                            cddc.setUse(new Coding("http://snomed.info/sct", "900000000000013009", 
-                                                    "Synonym (core metadata concept)"));
-                                        }
-                                    }
-                                } else if(prop != null && prop.getIRI().getShortForm().equals("deprecated")) {
-                                    OWLAnnotationValue val = ann.getValue();
-                                    if(val != null) {
-                                        Optional<OWLLiteral> lit = val.asLiteral();
-                                        if(lit.isPresent()) {
-                                            isDeprecated = lit.get().parseBoolean();
-                                        }
-                                    }
+                            if(!processedConcepts.contains(owlClass.getIRI().toString())) {
+                                ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
+                                cdc.setCode(owlClass.getIRI().toString());
+                                
+                                boolean isDeprecated = false;
+                                isDeprecated = getLabels(factory, o, owlClass, cdc, isDeprecated);
+                                
+                                // Special case: OWL:Thing
+                                if("http://www.w3.org/2002/07/owl#Thing".equals(cdc.getCode())) {
+                                    cdc.setDisplay("Thing");
                                 }
-                            }
-                            
-                            // Only add this concept if it has a label - if it doesn't then skip because it will be 
-                            // added when the imported ontology that contains it is processed.
-                            if(cdc.hasDisplay() && !processedConcepts.contains(cdc.getCode())) {
-                                processedConcepts.add(cdc.getCode());
-                                cs.addConcept(cdc);                       
-                            } else {
-                                return;
-                            }
-                            
-                            boolean isRoot = false;
-                            
-                            // Add hierarchy-related fields
-                            for(Node<OWLClass> parent : reasoner.getSuperClasses(owlClass, true)) {
-                                for(OWLClass ent : parent.getEntities()) {
-                                    if(ent.isOWLThing()){
-                                        isRoot = true;
-                                        continue;
-                                    }
-                                    if(ent.isOWLNothing()) continue;
-                                    ConceptPropertyComponent prop = cdc.addProperty();
-                                    prop.setCode("parent");
-                                    prop.setValue(new StringType(ent.getIRI().toString()));
+                                
+                                if(!cdc.hasDisplay()) {
+                                    conceptsWithNoLabel.add(cdc.getCode());
+                                    return;                
                                 }
+                                
+                                processedConcepts.add(owlClass.getIRI().toString());
+                                conceptsWithNoLabel.remove(cdc.getCode());
+                                cs.addConcept(cdc);
+                                
+                                boolean isRoot = false;
+                                isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot);
+                                
+                                ConceptPropertyComponent prop = cdc.addProperty();
+                                prop.setCode("root");
+                                prop.setValue(new BooleanType(isRoot));
+                                
+                                prop = cdc.addProperty();
+                                prop.setCode("deprecated");
+                                prop.setValue(new BooleanType(isDeprecated));
                             }
-                            for(Node<OWLClass> parent : reasoner.getSuperClasses(owlClass, false)) {
-                                for(OWLClass ent : parent.getEntities()) {
-                                    if(ent.isOWLThing() || ent.isOWLNothing()) continue;
-                                    ConceptPropertyComponent prop = cdc.addProperty();
-                                    prop.setCode("ancestor");
-                                    prop.setValue(new StringType(ent.getIRI().toString()));
-                                }
-                            }
-                            for(Node<OWLClass> child : reasoner.getSubClasses(owlClass, true)) {
-                                for(OWLClass ent : child.getEntities()) {
-                                    if(ent.isOWLThing() || ent.isOWLNothing()) continue;
-                                    ConceptPropertyComponent prop = cdc.addProperty();
-                                    prop.setCode("child");
-                                    prop.setValue(new StringType(ent.getIRI().toString()));
-                                }
-                            }
-                            
-                            // Check if this concept is equivalent to Thing - in this case it is a root
-                            for(OWLClass eq : reasoner.getEquivalentClasses(owlClass)) {
-                                if(eq.isOWLThing()){
-                                    isRoot = true;
-                                    break;
-                                }
-                            }
-                            
-                            ConceptPropertyComponent prop = cdc.addProperty();
-                            prop.setCode("root");
-                            prop.setValue(new BooleanType(isRoot));
-                            
-                            prop = cdc.addProperty();
-                            prop.setCode("deprecated");
-                            prop.setValue(new BooleanType(isDeprecated));
                         }
-            
+
                         @Override
                         public void visit(OWLObjectProperty property) {
                             // nothing to do - we do not index properties for now
@@ -350,8 +276,11 @@ public class MainController {
                         }
                     });
                 }
+                
+                log.info("Concepts with no label: " + conceptsWithNoLabel);
 
                 JsonParser jp = (JsonParser) fhirContext.newJsonParser();
+                jp.setPrettyPrint(true);
                 return new ResponseEntity<String>(jp.encodeResourceToString(cs), HttpStatus.OK);
                 
             } else {
@@ -360,6 +289,89 @@ public class MainController {
         } catch(IOException e) {
             return new ResponseEntity<String>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private boolean addHierarchyFields(final OWLReasoner reasoner, OWLClass owlClass, ConceptDefinitionComponent cdc,
+            boolean isRoot) {
+        // Add hierarchy-related fields
+        for(Node<OWLClass> parent : reasoner.getSuperClasses(owlClass, true)) {
+            for(OWLClass ent : parent.getEntities()) {
+                /*if(ent.isOWLThing()){
+                    isRoot = true;
+                    continue;
+                }*/
+                if(ent.isOWLNothing()) continue;
+                ConceptPropertyComponent prop = cdc.addProperty();
+                prop.setCode("parent");
+                prop.setValue(new CodeType(ent.getIRI().toString()));
+            }
+        }
+        
+        // Check if this concept is equivalent to Thing - in this case it is a root
+        for(OWLClass eq : reasoner.getEquivalentClasses(owlClass)) {
+            if(eq.isOWLThing()){
+                isRoot = true;
+                break;
+            }
+        }
+        return isRoot;
+    }
+    
+    private boolean getLabels(final OWLDataFactory factory, OWLOntology o, OWLClass owlClass,
+            ConceptDefinitionComponent cdc, boolean isDeprecated) {
+        // Add preferred term (from rdfs:label)
+        final List<String> labels = new ArrayList<>();
+        final Set<String> synonyms = new HashSet<>();
+        for(OWLAnnotation a : EntitySearcher.getAnnotations(owlClass, o, 
+                factory.getRDFSLabel())) {
+            OWLAnnotationValue val = a.getValue();
+            if(val instanceof OWLLiteral) {
+                final String label = ((OWLLiteral) val).getLiteral();
+                labels.add(label);
+            }
+        }
+        
+        if(labels.size() == 1) {
+            cdc.setDisplay((String) labels.toArray()[0]);
+        } else if(labels.size() > 1){
+            cdc.setDisplay(labels.get(0));
+            labels.remove(0);
+            synonyms.addAll(labels);
+        }
+        
+        // Add synonyms
+        for(OWLAnnotation ann : EntitySearcher.getAnnotationObjects(owlClass, o)) {
+            OWLAnnotationProperty prop = ann.getProperty();
+            if(prop != null && prop.getIRI().getShortForm().equals("hasExactSynonym")) {
+                // This is an oboInOwl extension TODO review
+                OWLAnnotationValue val = ann.getValue();
+                if(val != null) {
+                    Optional<OWLLiteral> lit = val.asLiteral();
+                    if(lit.isPresent()) {
+                        String label = lit.get().getLiteral();
+                        synonyms.add(label);
+                    }
+                }
+            } else if(prop != null && prop.getIRI().getShortForm().equals("deprecated")) {
+                OWLAnnotationValue val = ann.getValue();
+                if(val != null) {
+                    Optional<OWLLiteral> lit = val.asLiteral();
+                    if(lit.isPresent()) {
+                        isDeprecated = lit.get().parseBoolean();
+                    }
+                }
+            }
+        }
+        
+        for(String syn : synonyms) {
+            // This is a synonym - but we don't know the language
+            ConceptDefinitionDesignationComponent cddc = cdc.addDesignation();
+            cddc.setValue(syn);
+            cddc.setUse(new Coding("http://snomed.info/sct", "900000000000013009", 
+                    "Synonym (core metadata concept)"));
+        }
+        
+        return isDeprecated;
     }
     
 }
