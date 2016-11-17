@@ -12,6 +12,9 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hl7.fhir.dstu3.model.BooleanType;
+import org.hl7.fhir.dstu3.model.Bundle;
+import org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent;
+import org.hl7.fhir.dstu3.model.Bundle.BundleType;
 import org.hl7.fhir.dstu3.model.CodeSystem;
 import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemHierarchyMeaning;
 import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionComponent;
@@ -22,6 +25,10 @@ import org.hl7.fhir.dstu3.model.CodeSystem.PropertyType;
 import org.hl7.fhir.dstu3.model.CodeType;
 import org.hl7.fhir.dstu3.model.Coding;
 import org.hl7.fhir.dstu3.model.Enumerations.ConformanceResourceStatus;
+import org.hl7.fhir.dstu3.model.ValueSet;
+import org.hl7.fhir.dstu3.model.ValueSet.ConceptReferenceComponent;
+import org.hl7.fhir.dstu3.model.ValueSet.ConceptSetComponent;
+import org.hl7.fhir.dstu3.model.ValueSet.ValueSetComposeComponent;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.IRI;
@@ -30,12 +37,7 @@ import org.semanticweb.owlapi.model.OWLAnnotationProperty;
 import org.semanticweb.owlapi.model.OWLAnnotationValue;
 import org.semanticweb.owlapi.model.OWLClass;
 import org.semanticweb.owlapi.model.OWLDataFactory;
-import org.semanticweb.owlapi.model.OWLDataProperty;
-import org.semanticweb.owlapi.model.OWLDatatype;
 import org.semanticweb.owlapi.model.OWLLiteral;
-import org.semanticweb.owlapi.model.OWLNamedIndividual;
-import org.semanticweb.owlapi.model.OWLNamedObjectVisitor;
-import org.semanticweb.owlapi.model.OWLObjectProperty;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyCreationException;
 import org.semanticweb.owlapi.model.OWLOntologyID;
@@ -77,14 +79,119 @@ public class MainController {
     private List<String> descriptionElems;
     
     /**
+     * Returns the name of an ontology. Uses an rdfs:label or the ontology's IRI if one if not present. If the ontology
+     * has no IRI then it returns null.
+     * 
+     * @param ont
+     * @return
+     */
+    private String getOntologyName(OWLOntology ont) {
+        for(OWLAnnotation ann : ont.getAnnotations()) {
+            final String prop = ann.getProperty().getIRI().toString();
+            Optional<OWLLiteral> val = ann.getValue().asLiteral();
+            if(val.isPresent() && "http://www.w3.org/2000/01/rdf-schema#label".equals(prop)) {
+                return val.get().getLiteral();
+            }
+        }
+        
+        return getOntologyIri(ont);
+    }
+    
+    private String getOntologyIri(OWLOntology ont) {
+        OWLOntologyID ontId = ont.getOntologyID();
+        Optional<IRI> iri = ontId.getOntologyIRI();
+        
+        if(iri.isPresent()) {
+            return iri.get().toString();
+        } else {
+            return null;
+        }
+    }
+    
+    /**
+     * Adds this concept to the uber-code-system and to the include of the value set that represents just this ontology
+     * (not the closure of all ontologies).
+     * 
+     * @param factory
+     * @param cs
+     * @param reasoner
+     * @param conceptsWithNoLabel
+     * @param processedConcepts
+     * @param o
+     * @param inc
+     * @param owlClass
+     */
+    private void processClass(final OWLDataFactory factory, final CodeSystem cs,
+            final OWLReasoner reasoner, final Set<String> conceptsWithNoLabel,
+            final Set<String> processedConcepts, OWLOntology o, ConceptSetComponent inc,
+            OWLClass owlClass) {
+        final String code = owlClass.getIRI().toString();
+        ConceptReferenceComponent crc = inc.addConcept();
+        crc.setCode(code);
+        
+        if(!processedConcepts.contains(code)) {
+            ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
+            cdc.setCode(owlClass.getIRI().toString());
+            
+            boolean isDeprecated = false;
+            isDeprecated = getLabels(factory, o, owlClass, cdc, isDeprecated);
+            
+            // Special case: OWL:Thing
+            if("http://www.w3.org/2002/07/owl#Thing".equals(cdc.getCode())) {
+                cdc.setDisplay("Thing");
+            }
+            
+            if(!cdc.hasDisplay()) {
+                conceptsWithNoLabel.add(cdc.getCode());
+                return;                
+            }
+            
+            processedConcepts.add(owlClass.getIRI().toString());
+            conceptsWithNoLabel.remove(cdc.getCode());
+            cs.addConcept(cdc);
+            
+            boolean isRoot = false;
+            isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot);
+            
+            ConceptPropertyComponent prop = cdc.addProperty();
+            prop.setCode("root");
+            prop.setValue(new BooleanType(isRoot));
+            
+            prop = cdc.addProperty();
+            prop.setCode("deprecated");
+            prop.setValue(new BooleanType(isDeprecated));
+        }
+    }
+    
+    private ValueSet createValueSet(OWLOntology ont, String csId, String csUrl, int vsNum) {
+        final ValueSet vs = new ValueSet();
+        vs.setStatus(ConformanceResourceStatus.ACTIVE);
+        
+        
+        if(csId != null) vs.setId(csId + "_vs_" + vsNum);
+        String oIri = getOntologyIri(ont);
+        if(oIri == null) {
+            return null;
+        }
+        vs.setUrl(csUrl + "?vs=" + oIri);
+        String ontName = getOntologyName(ont);
+        if(ontName == null) {
+            return null;
+        }
+        vs.setName(ontName + " value set");
+        return vs;
+    }
+    
+    /**
      * Tranforms an OWL file into a FHIR code system resouce in JSON format.
      * 
-     * @param file
+     * @param file The OWL file.
+     * @param id The id of the resource if you intent to PUT it or null if you intend to POST it.
      * @return
      * @throws IOException
      */
     @RequestMapping(value="/transform", method=RequestMethod.POST, produces="application/json")
-    public ResponseEntity<String> transform(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<String> transform(@RequestParam("file") MultipartFile file, @RequestParam("id") String id) {
         
         try {
             if (!file.isEmpty()) {
@@ -164,7 +271,7 @@ public class MainController {
                 
                 // Populate basic code system info
                 final CodeSystem cs = new CodeSystem();
-                cs.setId("hpo");
+                if(id != null) cs.setId(id);
                 cs.setUrl(codeSystemUrl);
                 cs.setVersion(codeSystemVersion);
                 cs.setName(codeSystemName);
@@ -202,86 +309,52 @@ public class MainController {
                 final Set<String> conceptsWithNoLabel = new HashSet<>();
                 final Set<String> processedConcepts = new HashSet<>();
                 
-                for(OWLOntology o : manager.getImportsClosure(ont)) {
-                    if(log.isInfoEnabled()) log.info("Visiting ontology " + o.toString());
+                Bundle b = new Bundle();
+                b.setType(BundleType.COLLECTION);
+                BundleEntryComponent bec = b.addEntry();
+                bec.setResource(cs);
+                
+                // Process main ontology - don't process imports
+                log.info("Processing main ontology (" + ont.getClassesInSignature(Imports.EXCLUDED).size() + 
+                        " classes)");
+                ValueSet vs = createValueSet(ont, id, codeSystemUrl, 0);
+                ValueSetComposeComponent comp = new ValueSetComposeComponent();
+                vs.setCompose(comp);
+                ConceptSetComponent inc = comp.addInclude();
+                inc.setSystem(codeSystemUrl);
+                inc.setVersion(codeSystemVersion);
+                bec = b.addEntry();
+                bec.setResource(vs);
+                for(OWLClass c : ont.getClassesInSignature(Imports.EXCLUDED)) {
+                    processClass(factory, cs, reasoner, conceptsWithNoLabel, processedConcepts, ont, inc, c);
+                }
+                
+                // Process imported ontologies
+                int i = 1;
+                for(OWLOntology o : manager.getImports(ont)) {
+                    vs = createValueSet(o, id, codeSystemUrl, i);
+                    comp = new ValueSetComposeComponent();
+                    vs.setCompose(comp);
+                    inc = comp.addInclude();
+                    inc.setSystem(codeSystemUrl);
+                    inc.setVersion(codeSystemVersion);
+                    bec = b.addEntry();
+                    bec.setResource(vs);
                     
-                    o.accept(new OWLNamedObjectVisitor() {
-                        
-                        @Override
-                        public void visit(OWLClass owlClass) {
-                            if(!processedConcepts.contains(owlClass.getIRI().toString())) {
-                                ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
-                                cdc.setCode(owlClass.getIRI().toString());
-                                
-                                boolean isDeprecated = false;
-                                isDeprecated = getLabels(factory, o, owlClass, cdc, isDeprecated);
-                                
-                                // Special case: OWL:Thing
-                                if("http://www.w3.org/2002/07/owl#Thing".equals(cdc.getCode())) {
-                                    cdc.setDisplay("Thing");
-                                }
-                                
-                                if(!cdc.hasDisplay()) {
-                                    conceptsWithNoLabel.add(cdc.getCode());
-                                    return;                
-                                }
-                                
-                                processedConcepts.add(owlClass.getIRI().toString());
-                                conceptsWithNoLabel.remove(cdc.getCode());
-                                cs.addConcept(cdc);
-                                
-                                boolean isRoot = false;
-                                isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot);
-                                
-                                ConceptPropertyComponent prop = cdc.addProperty();
-                                prop.setCode("root");
-                                prop.setValue(new BooleanType(isRoot));
-                                
-                                prop = cdc.addProperty();
-                                prop.setCode("deprecated");
-                                prop.setValue(new BooleanType(isDeprecated));
-                            }
-                        }
-
-                        @Override
-                        public void visit(OWLObjectProperty property) {
-                            // nothing to do - we do not index properties for now
-                        }
-            
-                        @Override
-                        public void visit(OWLDataProperty property) {
-                            // nothing to do - we do not index data properties for now
-                        }
-            
-                        @Override
-                        public void visit(OWLNamedIndividual owlIndividual) {
-                            // nothing to do - we do not index individuals for now
-                        }
-            
-                        @Override
-                        public void visit(OWLOntology ontology) {
-                            for(OWLClass owlClass : ontology.getClassesInSignature(Imports.INCLUDED)) {
-                                visit(owlClass);
-                            }
-                        }
-            
-                        @Override
-                        public void visit(OWLDatatype datatype) {
-                            // nothing to do - we do not index data types for now
-                        }
-            
-                        @Override
-                        public void visit(OWLAnnotationProperty property) {
-                            // TODO need to deal with these to produce concept maps
-                        }
-                    });
+                    String ontologyName = getOntologyName(o);
+                    log.info("Processing imported ontology " + ontologyName + " (" + 
+                            o.getClassesInSignature(Imports.INCLUDED).size() + " classes)");
+                    for(OWLClass c : o.getClassesInSignature(Imports.INCLUDED)) {
+                        processClass(factory, cs, reasoner, conceptsWithNoLabel, processedConcepts, o, inc, c);
+                    }
+                    i++;
                 }
                 
                 log.info("Concepts with no label: " + conceptsWithNoLabel);
 
                 JsonParser jp = (JsonParser) fhirContext.newJsonParser();
                 jp.setPrettyPrint(true);
-                return new ResponseEntity<String>(jp.encodeResourceToString(cs), HttpStatus.OK);
+                return new ResponseEntity<String>(jp.encodeResourceToString(b), HttpStatus.OK);
                 
             } else {
                 return new ResponseEntity<String>("No file was uploaded", HttpStatus.BAD_REQUEST);
