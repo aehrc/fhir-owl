@@ -20,11 +20,12 @@ import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemHierarchyMeaning;
 import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionDesignationComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.ConceptPropertyComponent;
+import org.hl7.fhir.dstu3.model.CodeSystem.FilterOperator;
 import org.hl7.fhir.dstu3.model.CodeSystem.PropertyComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.PropertyType;
 import org.hl7.fhir.dstu3.model.CodeType;
 import org.hl7.fhir.dstu3.model.Coding;
-import org.hl7.fhir.dstu3.model.Enumerations.ConformanceResourceStatus;
+import org.hl7.fhir.dstu3.model.Enumerations.PublicationStatus;
 import org.hl7.fhir.dstu3.model.ValueSet;
 import org.hl7.fhir.dstu3.model.ValueSet.ConceptReferenceComponent;
 import org.hl7.fhir.dstu3.model.ValueSet.ConceptSetComponent;
@@ -165,7 +166,7 @@ public class MainController {
     
     private ValueSet createValueSet(OWLOntology ont, String csId, String csUrl, int vsNum) {
         final ValueSet vs = new ValueSet();
-        vs.setStatus(ConformanceResourceStatus.ACTIVE);
+        vs.setStatus(PublicationStatus.ACTIVE);
         
         
         if(csId != null) vs.setId(csId + "_vs_" + vsNum);
@@ -187,11 +188,19 @@ public class MainController {
      * 
      * @param file The OWL file.
      * @param id The id of the resource if you intent to PUT it or null if you intend to POST it.
+     * @param fhirUrl The URL of the FHIR server where the resource should be stored. If null it will use the server
+     * configured using the fhir.url property.
      * @return
+     * 
+     * TODO: this should return the same value returned by the FHIR server where the resource will be added.
+     * 
      * @throws IOException
      */
     @RequestMapping(value="/transform", method=RequestMethod.POST, produces="application/json")
-    public ResponseEntity<String> transform(@RequestParam("file") MultipartFile file, @RequestParam("id") String id) {
+    public ResponseEntity<String> transform(
+            @RequestParam("file") MultipartFile file, 
+            @RequestParam("id") String id/*,
+            @RequestParam("fhirUrl") String fhirUrl*/) {
         
         try {
             if (!file.isEmpty()) {
@@ -277,9 +286,9 @@ public class MainController {
                 cs.setName(codeSystemName);
                 if(publisher != null) cs.setPublisher(publisher);
                 if(description != null) cs.setDescription(description);
-                cs.setStatus(ConformanceResourceStatus.ACTIVE);
+                cs.setStatus(PublicationStatus.ACTIVE);
                 cs.setValueSet("http://purl.obolibrary.org/obo/hp.owl");
-                cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.SUBSUMES);
+                cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
                 
                 PropertyComponent parentProp = cs.addProperty();
                 parentProp.setCode("parent");
@@ -296,6 +305,10 @@ public class MainController {
                 depProp.setCode("deprecated");
                 depProp.setType(PropertyType.BOOLEAN);
                 depProp.setDescription("Indicates if this concept is deprecated.");
+                
+                cs.addFilter().setCode("parent").addOperator(FilterOperator.EQUAL).setValue("A concept code.");
+                cs.addFilter().setCode("root").addOperator(FilterOperator.EQUAL).setValue("True or false.");
+                cs.addFilter().setCode("deprecated").addOperator(FilterOperator.EQUAL).setValue("True or false.");
             
                 // Now classify the ontology
                 OWLReasonerFactory reasonerFactory = new ElkReasonerFactory();
