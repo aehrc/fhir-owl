@@ -306,7 +306,7 @@ public class MainController {
                 depProp.setType(PropertyType.BOOLEAN);
                 depProp.setDescription("Indicates if this concept is deprecated.");
                 
-                cs.addFilter().setCode("parent").addOperator(FilterOperator.EQUAL).setValue("A concept code.");
+                //cs.addFilter().setCode("parent").addOperator(FilterOperator.EQUAL).setValue("A concept code.");
                 cs.addFilter().setCode("root").addOperator(FilterOperator.EQUAL).setValue("True or false.");
                 cs.addFilter().setCode("deprecated").addOperator(FilterOperator.EQUAL).setValue("True or false.");
             
