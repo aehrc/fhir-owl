@@ -7,16 +7,20 @@ package au.csiro.fhir.owl;
 
 import ca.uhn.fhir.context.FhirContext;
 import com.google.common.base.Optional;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.annotation.PostConstruct;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hl7.fhir.dstu3.model.BooleanType;
@@ -52,6 +56,7 @@ import org.semanticweb.owlapi.reasoner.Node;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
 import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
 import org.semanticweb.owlapi.search.EntitySearcher;
+import org.semanticweb.owlapi.util.SimpleIRIMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -78,6 +83,33 @@ public class FhirOwlService {
   @Autowired
   private FhirContext ctx;
   
+  private final Map<IRI, IRI> iriMap = new HashMap<>();
+  
+  @PostConstruct
+  private void init() {
+    log.info("Checking for IRI mappings");
+    InputStream input = null;
+    try {
+      input = FhirContext.class.getClassLoader().getResourceAsStream("iri_mappings.txt");
+      if (input == null) {
+        log.info("Did not find iri_mappings.txt in classpath.");
+        return;
+      }
+      
+      final String[] lines = getLinesFromInputStream(input);
+      for (String line : lines) {
+        String[] parts = line.split("[,]");
+        iriMap.put(IRI.create(parts[0]), IRI.create(new File(parts[1])));
+      }
+      
+      for (IRI key : iriMap.keySet()) {
+        log.info("Loaded IRI mapping " + key.toString() + " -> " + iriMap.get(key).toString());
+      }
+      
+    } catch (Throwable t) {
+      log.warn("There was a problem loading IRI mappings.", t);
+    }
+  }
   
   /**
    * Transforms an OWL file into a bundle of FHIR code systems.
@@ -90,6 +122,7 @@ public class FhirOwlService {
   public void transform(File input, File output) throws IOException, OWLOntologyCreationException {
     log.info("Loading ontology from file " + input.getAbsolutePath());
     OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
+    addIriMappings(manager);
     final OWLOntology ont = manager.loadOntologyFromOntologyDocument(input);
     
     log.info("Creating code systems");
@@ -111,6 +144,33 @@ public class FhirOwlService {
       log.info("Writing bundle to file: " + output.getAbsolutePath());
       ctx.newJsonParser().setPrettyPrint(true).encodeResourceToWriter(b, bw);
       log.info("Done!");
+    }
+  }
+  
+  private String[] getLinesFromInputStream(InputStream is) throws IOException {
+    final List<String> res = new ArrayList<>();
+    BufferedReader br = null;
+    String line;
+    try {
+      br = new BufferedReader(new InputStreamReader(is));
+      while ((line = br.readLine()) != null) {
+        res.add(line);
+      }
+    } finally {
+      if (br != null) {
+        try {
+          br.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+    return res.toArray(new String[res.size()]);
+  }
+  
+  private void addIriMappings(OWLOntologyManager manager) {
+    for (IRI key : iriMap.keySet()) {
+      manager.getIRIMappers().add(new SimpleIRIMapper(key, iriMap.get(key)));
     }
   }
   
@@ -231,11 +291,11 @@ public class FhirOwlService {
       if (iri != null) {
         final String shortForm = iri.getShortForm();
         if (shortForm.endsWith(".owl")) {
-          log.info("Found OBO-like IRI: " + shortForm);
+          log.info("Found OBO-like IRI: " + iri);
           prefixSystemMap.put(shortForm.substring(0, shortForm.length() - 4).toLowerCase(), 
               iri.toString());
         } else {
-          log.info("IRI is not OBO-like:" + shortForm);
+          log.info("IRI is not OBO-like:" + iri);
         }
       } else {
         log.warn("Ontology " + getOntologyName(ont) + " has no IRI.");
@@ -245,11 +305,13 @@ public class FhirOwlService {
     // 4. Create a IRI -> system map for all classes in the closure
     log.info("Building IRI -> system map");
     final Map<IRI, String> iriSystemMap = new HashMap<>();
+    final Map<IRI, String> iriOntologyMap = new HashMap<>();
     for (OWLOntology ont : closure) {
       final IRI ontIri = getOntologyIri(ont);
       final String ontologyIri = ontIri != null ? ontIri.toString() : "ANONYMOUS";
       for (OWLClass owlClass : ont.getClassesInSignature(Imports.EXCLUDED)) {
         final IRI classIri = owlClass.getIRI();
+        iriOntologyMap.put(classIri, ontologyIri);
         String system = getSystem(owlClass, ontologyIri, prefixSystemMap);
         iriSystemMap.put(classIri, system);
       }
@@ -257,51 +319,67 @@ public class FhirOwlService {
     
     // 5. Try to find any ontologies that haven't been imported
     log.info("Finding ontologies that haven't been imported.");
-    IRI iri = findNullValue(iriSystemMap);
-    while (iri != null) {
-      
-      log.info("Trying to find ontology for class " + iri.toString());
-      final List<String> possibleIris = findOntologyIri(iri);
-      
-      log.info("Possible IRIs are: " + possibleIris);
-      
-      // We need a new manager here
-      Map<IRI, String> newIriSystemMap = null;
-      for (String possibleIri : possibleIris) {
-        OWLOntologyManager om = OWLManager.createOWLOntologyManager();
-        try {
-          final OWLOntology ont = om.loadOntology(IRI.create(possibleIri));
-          
-          // Check if concept is in fact in this ontology (it is unlikely but it might not be)
+    final Set<IRI> iris = findNullValues(iriSystemMap);
+    final Map<String, Set<IRI>> ontologyIriToPossibleIrisMap = new HashMap<>();
+    for (IRI iri : iris) {
+      for (String ontologyIri : findOntologyIri(iri)) {
+        Set<IRI> possibleIris = ontologyIriToPossibleIrisMap.get(ontologyIri);
+        if (possibleIris == null) {
+          possibleIris = new HashSet<>();
+          ontologyIriToPossibleIrisMap.put(ontologyIri, possibleIris);
+        }
+        possibleIris.add(iri);
+      }
+    }
+    
+    // Load possible ontologies
+    for (String ontologyIri : ontologyIriToPossibleIrisMap.keySet()) {
+      OWLOntologyManager om = OWLManager.createOWLOntologyManager();
+      addIriMappings(om);
+      try {
+        log.info("Loading " + ontologyIri);
+        final OWLOntology ont = om.loadOntology(IRI.create(ontologyIri));
+        log.info("Done");
+        boolean containsAtLeastOneClass = false;
+        
+        // Check if concepts are in fact in this ontology (it is unlikely but it might not be)
+        for (IRI iri : ontologyIriToPossibleIrisMap.get(ontologyIri)) {
           if (ont.containsClassInSignature(iri)) {
-            log.info("Ontology was loaded successfully and contains the class.");
-            final Set<OWLOntology> cs = new HashSet<>();
-            newIriSystemMap = getIriSystemMap(ont, om, cs);
-            break;
+            log.info("Ontology contains class " + iri);
+            containsAtLeastOneClass = true;
           } else {
-            log.info("Ontology loaded successfully but did not contain class.");
-          }
-        } catch (OWLOntologyCreationException e) {
-          log.warn("Attempted loading ontology " + possibleIri + " but failed: " 
-              + e.getLocalizedMessage());
-        }
-      }
-      
-      if (newIriSystemMap == null) {
-        // Replace null value with constant if unable to find ontology
-        log.info("Unable to find ontology for class " + iri.toString());
-        iriSystemMap.put(iri, ONTOLOGY_UNAVAILABLE);
-      } else {
-        // Carefully merge the maps, i.e., do not copy entries with value ONTOLOGY_UNAVAILABLE
-        for (IRI key : newIriSystemMap.keySet()) {
-          final String value = newIriSystemMap.get(key);
-          if (!ONTOLOGY_UNAVAILABLE.equals(value)) {
-            iriSystemMap.put(key, value);
+            log.info("Ontology does not contain class " + iri);
           }
         }
+        if (containsAtLeastOneClass) {
+          log.info("Ontology contained at least one class so calculating IRI - system map and "
+              + "merging");
+          final Set<OWLOntology> cs = new HashSet<>();
+          final Map<IRI, String> newIriSystemMap = getIriSystemMap(ont, om, cs);
+          // Carefully merge the maps, i.e., do not copy entries with value ONTOLOGY_UNAVAILABLE
+          for (IRI key : newIriSystemMap.keySet()) {
+            final String value = newIriSystemMap.get(key);
+            if (!ONTOLOGY_UNAVAILABLE.equals(value)) {
+              iriSystemMap.put(key, value);
+            }
+          }
+        }
+      } catch (OWLOntologyCreationException e) {
+        log.warn("Attempted loading ontology " + ontologyIri + " but failed: " 
+            + e.getLocalizedMessage());
       }
-      
-      iri = findNullValue(iriSystemMap);
+    }
+    
+    // Finally, if any concepts still haven't been assigned to an ontology, use the ontology
+    // where they were defined
+    for (IRI key : iriSystemMap.keySet()) {
+      final String val = iriSystemMap.get(key);
+      if (val == null || val.equals(ONTOLOGY_UNAVAILABLE)) {
+        final String cont = iriOntologyMap.get(key);
+        log.info("Class " + key + " has no ontology assigned yet. Assigning containing ontology "
+            + "IRI: " + cont);
+        iriSystemMap.put(key, cont);
+      }
     }
     
     return iriSystemMap;
@@ -342,13 +420,14 @@ public class FhirOwlService {
     return res;
   }
   
-  private IRI findNullValue(Map<IRI, String> map) {
+  private Set<IRI> findNullValues(Map<IRI, String> map) {
+    final Set<IRI> res = new HashSet<>();
     for (IRI key : map.keySet()) {
       if (map.get(key) == null) {
-        return key;
+        res.add(key);
       }
     }
-    return null;
+    return res;
   }
 
   /**

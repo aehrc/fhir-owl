@@ -59,6 +59,15 @@ public class Application implements CommandLineRunner {
    * @param args Arguments.
    */
   public static void main(String[] args) {
+    trustEverything();
+    
+    SpringApplication app = new SpringApplication(Application.class);
+    app.setBannerMode(Banner.Mode.OFF);
+    app.run(args);
+
+  }
+  
+  private static void trustEverything() {
     // Create a trust manager that does not validate certificate chains
     TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
       public java.security.cert.X509Certificate[] getAcceptedIssuers() {
@@ -89,11 +98,6 @@ public class Application implements CommandLineRunner {
       e.printStackTrace();
       System.exit(-1);
     }
-    
-    SpringApplication app = new SpringApplication(Application.class);
-    app.setBannerMode(Banner.Mode.OFF);
-    app.run(args);
-
   }
 
   @Override
