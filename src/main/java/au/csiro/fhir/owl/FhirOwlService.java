@@ -420,7 +420,7 @@ public class FhirOwlService {
     
     log.debug("Found " + parents.size() + " parents for concept " + owlClass.getIRI());
     for (OWLClass parent : parents) {
-      if (parent.isOWLNothing() || parent.isOWLThing()) { 
+      if (parent.isOWLNothing()) { 
         continue;
       }
       final IRI iri = parent.getIRI();
