@@ -16,14 +16,4 @@ The following are some of the challenges in this transformation:
 
 5. Some imports are not versioned, which makes creating the corresponding code systems difficult.
 
-All of these examples are based on HPO version 2017\-06\-21 (and it's imports). 
-
-The algorithm for determining the containing code system for an OWL class is as follows:
-
-1. Check if the IRI has the ontology IRI as prefix. In this case, the class is defined in this ontology.
-2. Check the short name of the class and see if matches the following regex: ``^[a-zA-Z]*[_][0-9]*``. In that case we assume the class follows the OBO conventions and the prefix determines the containing ontology.
-
-
-
-
-
+All of these examples are based on HPO version 2017\-06\-21 (and it's imports).
