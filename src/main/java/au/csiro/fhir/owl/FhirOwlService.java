@@ -24,10 +24,6 @@ import javax.annotation.PostConstruct;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hl7.fhir.dstu3.model.BooleanType;
-import org.hl7.fhir.dstu3.model.Bundle;
-import org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent;
-import org.hl7.fhir.dstu3.model.Bundle.BundleType;
-import org.hl7.fhir.dstu3.model.Bundle.HTTPVerb;
 import org.hl7.fhir.dstu3.model.CodeSystem;
 import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemContentMode;
 import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemHierarchyMeaning;
@@ -37,6 +33,7 @@ import org.hl7.fhir.dstu3.model.CodeSystem.ConceptPropertyComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.FilterOperator;
 import org.hl7.fhir.dstu3.model.CodeSystem.PropertyComponent;
 import org.hl7.fhir.dstu3.model.CodeSystem.PropertyType;
+import org.hl7.fhir.dstu3.model.CodeType;
 import org.hl7.fhir.dstu3.model.Coding;
 import org.hl7.fhir.dstu3.model.Enumerations.PublicationStatus;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
@@ -120,32 +117,11 @@ public class FhirOwlService {
    */
   public void transform(File input, File output) throws IOException, OWLOntologyCreationException {
     log.info("Creating code systems");
-    final List<CodeSystem> codeSystems = createCodeSystems(input);
-    final Bundle b = new Bundle();
-    b.setType(BundleType.BATCH);
-    for (CodeSystem cs : codeSystems) {
-      int numConcepts = cs.getConcept().size();
-      if (numConcepts > 0) {
-        final String name = cs.getName();
-        String id = null;
-        log.info("Adding code system " + name + " [" + numConcepts + "]");
-        if (name.contains("/")) {
-          id = IRI.create(name).getShortForm().replaceAll("[^a-zA-Z0-9]", "-");
-        } else {
-          id = name.replaceAll("[^a-zA-Z0-9]", "-");
-        }
-        
-        BundleEntryComponent bec = b.addEntry();
-        bec.setResource(cs);
-        bec.getRequest().setMethod(HTTPVerb.PUT).setUrl("CodeSystem/" + id);
-      } else {
-        log.info("Excluding code system " + cs.getName() + " because it has no codes");
-      }
-    }
+    final CodeSystem codeSystem = createCodeSystem(input);
     
     try (BufferedWriter bw = new BufferedWriter(new FileWriter(output))) {
-      log.info("Writing bundle to file: " + output.getAbsolutePath());
-      ctx.newJsonParser().setPrettyPrint(true).encodeResourceToWriter(b, bw);
+      log.info("Writing code system to file: " + output.getAbsolutePath());
+      ctx.newJsonParser().setPrettyPrint(true).encodeResourceToWriter(codeSystem, bw);
       log.info("Done!");
     }
   }
@@ -187,101 +163,66 @@ public class FhirOwlService {
   }
   
   /**
-   * Creates code systems for an ontology and its imports.
+   * Creates a code system for an ontology and its imports.
    * 
    * @param input The ontology to transform.
-   * @return A list of generated code systems.
+   * @return The generated code system.
    * @throws OWLOntologyCreationException If something goes wrong creating the ontologies.
    */
-  private List<CodeSystem> createCodeSystems(File input) 
-      throws OWLOntologyCreationException {
+  private CodeSystem createCodeSystem(File input) throws OWLOntologyCreationException {
     
     log.info("Loading ontology from file " + input.getAbsolutePath());
     OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
     addIriMappings(manager);
     final OWLOntology rootOnt = manager.loadOntologyFromOntologyDocument(input);
     
-    // 1. Get IRI -> system map - might contain null values
+    // Get IRI -> system map - might contain null values
     Set<OWLOntology> closure = manager.getImportsClosure(rootOnt);
     final Map<IRI, String> iriSystemMap = getIriSystemMap(closure);
     
-    // 2. Classify root ontology
+    
+    // Extract labels for all classes
+    final Map<IRI, String> iriDisplayMap = new HashMap<>();
+    for (OWLClass owlClass : rootOnt.getClassesInSignature(Imports.INCLUDED)) {
+      iriDisplayMap.put(owlClass.getIRI(), null);
+    }
+    
+    for (OWLOntology ont : closure) {
+      for (OWLClass oc : ont.getClassesInSignature()) {
+        if (iriDisplayMap.containsKey(oc.getIRI())) {
+          String pt = getPreferedTerm(oc, ont);
+          if (pt != null) {
+            iriDisplayMap.put(oc.getIRI(), pt);
+          }
+        }
+      }
+    }
+    
+    // Make sure there are no null labels
+    final Set<IRI> unnamed = new HashSet<>();
+    for (IRI key : iriDisplayMap.keySet()) {
+      String display = iriDisplayMap.get(key);
+      if (display == null) {
+        log.warn("Could not find label for class " + key.toString());
+        unnamed.add(key);
+      }
+    }
+    
+    for (IRI un : unnamed) {
+      iriDisplayMap.put(un, un.toString());
+    }
+    
+    // Classify root ontology
     log.info("Classifying ontology " + getOntologyName(rootOnt));
     OWLReasonerFactory reasonerFactory = new ElkReasonerFactory();
     OWLReasoner reasoner = reasonerFactory.createReasoner(rootOnt);
     reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY);
     
-    // 2. For each ontology create a code system
-    final List<CodeSystem> res = new ArrayList<>();
-    for (OWLOntology ont : closure) {
-      log.info("Creating code system for ontology " + getOntologyName(ont));
-      try {
-        res.add(createCodeSystem(ont, manager.getOWLDataFactory(), reasoner, iriSystemMap));
-      } catch (NoIdException e) {
-        log.warn("Could not create a Code System for ontology " + getOntologyName(ont) 
-            + " because it has no IRI.");
-      }
-      reasoner.dispose();
-    }
-
-    return res;
+    // Create code system
+    return createCodeSystem(rootOnt, manager.getOWLDataFactory(), reasoner, iriSystemMap, 
+        iriDisplayMap);
   }
   
-  /**
-   * Iterates over all the concepts in the closure of an ontology an attempts to determine
-   * the system for each one.
-   * 
-   * @param rootOnt The root ontology.
-   * @param manager The ontology manager.
-   * @param closure Used to return the ontology closure.
-   * @return A map of IRIs to systems.
-   * 
-   * @throws OWLOntologyCreationException If something goes wrong creating the ontologies.
-   */
-  private Map<IRI, String> getIriSystemMap(Set<OWLOntology> closure) {
-    log.info("Getting IRI -> system map for ontologies: \n" + getOntologiesNames(closure));
-    
-    // 1. For each ontology, check IRI, create OBO-like prefix and build prefix -> system map
-    log.info("Building prefix -> system map");
-    final Map<String, String> prefixSystemMap = new HashMap<>();
-    for (OWLOntology ont : closure) {
-      final IRI iri = getOntologyIri(ont);
-      if (iri != null) {
-        final String shortForm = iri.getShortForm();
-        if (shortForm.endsWith(".owl")) {
-          log.info("Found OBO-like IRI: " + iri);
-          prefixSystemMap.put(shortForm.substring(0, shortForm.length() - 4).toLowerCase(), 
-              iri.toString());
-        } else {
-          log.info("IRI is not OBO-like:" + iri);
-        }
-      } else {
-        log.warn("Ontology " + getOntologyName(ont) + " has no IRI.");
-      }
-    }
-    
-    // 3. Create a IRI -> system map for all classes in the closure
-    log.info("Building IRI -> system map");
-    final Map<IRI, String> iriSystemMap = new HashMap<>();
-    for (OWLOntology ont : closure) {
-      final IRI ontIri = getOntologyIri(ont);
-      final String ontologyIri = ontIri != null ? ontIri.toString() : "ANONYMOUS";
-      for (OWLClass owlClass : ont.getClassesInSignature(Imports.EXCLUDED)) {
-        final IRI classIri = owlClass.getIRI();
-        String system = getSystem(owlClass, ontologyIri, prefixSystemMap);
-        if (system == null) {
-          // If the system cannot be determined we assume the system is the ontology where
-          // the concept is declared
-          iriSystemMap.put(classIri, ontologyIri);
-        } else {
-          iriSystemMap.put(classIri, system);
-        }
-      }
-    }
-
-    return iriSystemMap;
-  }
-
   /**
    * Creates a code system from an ontology.
    * 
@@ -293,7 +234,7 @@ public class FhirOwlService {
    * @return The code system.
    */
   private CodeSystem createCodeSystem(OWLOntology ont, final OWLDataFactory factory, 
-      OWLReasoner reasoner, Map<IRI, String> iriSystemMap) {
+      OWLReasoner reasoner, Map<IRI, String> iriSystemMap, Map<IRI, String> iriDisplayMap) {
     // Extract ontology information
     final String codeSystemUrl;
     final String codeSystemVersion;
@@ -386,6 +327,11 @@ public class FhirOwlService {
     parentProp.setCode("parent");
     parentProp.setType(PropertyType.CODE);
     parentProp.setDescription("Parent codes.");
+    
+    PropertyComponent importedProp = cs.addProperty();
+    importedProp.setCode("imported");
+    importedProp.setType(PropertyType.BOOLEAN);
+    importedProp.setDescription("Indicates if the concept is imported from another code system.");
 
     PropertyComponent rootProp = cs.addProperty();
     rootProp.setCode("root");
@@ -402,31 +348,97 @@ public class FhirOwlService {
     cs.addFilter().setCode("root").addOperator(FilterOperator.EQUAL).setValue("True or false.");
     cs.addFilter().setCode("deprecated").addOperator(FilterOperator.EQUAL)
       .setValue("True or false.");
-
-    for (OWLClass owlClass : ont.getClassesInSignature(Imports.EXCLUDED)) {
-      processClass(owlClass, cs, ont, reasoner, iriSystemMap);
+    cs.addFilter().setCode("imported").addOperator(FilterOperator.EQUAL).setValue("True or false");
+    
+    for (OWLClass owlClass : ont.getClassesInSignature(Imports.INCLUDED)) {
+      processClass(owlClass, cs, ont, reasoner, iriSystemMap, codeSystemUrl, iriDisplayMap);
     }
 
     return cs;
   }
+  
+  /**
+   * Iterates over all the concepts in the closure of an ontology an attempts to determine
+   * the system for each one.
+   * 
+   * @param rootOnt The root ontology.
+   * @param manager The ontology manager.
+   * @param closure Used to return the ontology closure.
+   * @return A map of IRIs to systems.
+   * 
+   * @throws OWLOntologyCreationException If something goes wrong creating the ontologies.
+   */
+  private Map<IRI, String> getIriSystemMap(Set<OWLOntology> closure) {
+    log.info("Getting IRI -> system map for ontologies: \n" + getOntologiesNames(closure));
+    
+    // 1. For each ontology, check IRI, create OBO-like prefix and build prefix -> system map
+    log.info("Building prefix -> system map");
+    final Map<String, String> prefixSystemMap = new HashMap<>();
+    for (OWLOntology ont : closure) {
+      final IRI iri = getOntologyIri(ont);
+      if (iri != null) {
+        final String shortForm = iri.getShortForm();
+        if (shortForm.endsWith(".owl")) {
+          log.info("Found OBO-like IRI: " + iri);
+          prefixSystemMap.put(shortForm.substring(0, shortForm.length() - 4).toLowerCase(), 
+              iri.toString());
+        } else {
+          log.info("IRI is not OBO-like:" + iri);
+        }
+      } else {
+        log.warn("Ontology " + getOntologyName(ont) + " has no IRI.");
+      }
+    }
+    
+    // 3. Create a IRI -> system map for all classes in the closure
+    log.info("Building IRI -> system map");
+    final Map<IRI, String> iriSystemMap = new HashMap<>();
+    for (OWLOntology ont : closure) {
+      final IRI ontIri = getOntologyIri(ont);
+      final String ontologyIri = ontIri != null ? ontIri.toString() : "ANONYMOUS";
+      for (OWLClass owlClass : ont.getClassesInSignature(Imports.EXCLUDED)) {
+        final IRI classIri = owlClass.getIRI();
+        String system = getSystem(owlClass, ontologyIri, prefixSystemMap);
+        if (system == null) {
+          // If the system cannot be determined we assume the system is the ontology where
+          // the concept is declared
+          iriSystemMap.put(classIri, ontologyIri);
+        } else {
+          iriSystemMap.put(classIri, system);
+        }
+      }
+    }
+
+    return iriSystemMap;
+  }
 
   private boolean addHierarchyFields(final OWLReasoner reasoner, OWLClass owlClass, 
-      ConceptDefinitionComponent cdc, boolean isRoot, Map<IRI, String> iriSystemMap) {
+      ConceptDefinitionComponent cdc, boolean isRoot, Map<IRI, String> iriSystemMap, 
+      String rootSystem) {
     // Add hierarchy-related fields
     final Set<OWLClass> parents = reasoner.getSuperClasses(owlClass, true).getFlattened();
     
     log.debug("Found " + parents.size() + " parents for concept " + owlClass.getIRI());
     for (OWLClass parent : parents) {
-      if (parent.isOWLNothing()) { 
+      if (parent.isOWLNothing() || parent.isOWLThing()) { 
         continue;
       }
       final IRI iri = parent.getIRI();
       final String system = iriSystemMap.get(iri);
       if (system != null) {
-        final ConceptPropertyComponent prop = cdc.addProperty();
-        prop.setCode("parent");
-        final String code = iri.getShortForm();
-        prop.setValue(new Coding().setSystem(system).setCode(code));
+        if (system.equals(rootSystem)) {
+          final ConceptPropertyComponent parentProp = cdc.addProperty();
+          parentProp.setCode("parent");
+          final String code = iri.getShortForm();
+          parentProp.setValue(new CodeType(code));
+        } else {
+          // Use foreignParent property
+          final ConceptPropertyComponent parentProp = cdc.addProperty();
+          parentProp.setCode("parent");
+          final String code = iri.toString();
+          parentProp.setValue(new CodeType(code));
+        }
+        
       }
     }
 
@@ -608,60 +620,66 @@ public class FhirOwlService {
    * @param cs The code system where the concept will be added.
    * @param ont The ontology. Needed to search for the labels of the concept.
    * @param reasoner The reasoner. Required to get the parents of a concept.
-   * @param iriSystemMap 
+   * @param iriSystemMap A map of IRIs to systems.
+   * @param rootSystem The root system.
+   * @param iriDisplayMap A map with the displays for all concepts.
    * 
    */
   private void processClass(OWLClass owlClass, CodeSystem cs, OWLOntology ont, 
-      OWLReasoner reasoner, Map<IRI, String> iriSystemMap) {
+      OWLReasoner reasoner, Map<IRI, String> iriSystemMap, String rootSystem, 
+      Map<IRI, String> iriDisplayMap) {
     final IRI iri = owlClass.getIRI();
-    final String code = iri.getShortForm();
     final String classSystem = iriSystemMap.get(iri);
+    final String code =  classSystem.equals(rootSystem) ? iri.getShortForm() : iri.toString();
     
-    final String codeSytemUrl = cs.getUrl();
-    
-    if (classSystem != null && classSystem.equals(codeSytemUrl)) {
-      // This class is defined in this ontology so create code
-      final ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
-      cdc.setCode(code);
+    final ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
+    cdc.setCode(code);
 
-      final boolean isDeprecated = isDeprecated(owlClass, ont);
+    final boolean isDeprecated = isDeprecated(owlClass, ont);
 
-      // Special case: OWL:Thing
-      if ("http://www.w3.org/2002/07/owl#Thing".equals(cdc.getCode())) {
-        cdc.setDisplay("Thing");
-      }
-
-      boolean isRoot = false;
-      isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot, iriSystemMap);
-
-      ConceptPropertyComponent prop = cdc.addProperty();
-      prop.setCode("root");
-      prop.setValue(new BooleanType(isRoot));
-
-      prop = cdc.addProperty();
-      prop.setCode("deprecated");
-      prop.setValue(new BooleanType(isDeprecated));
-      
-      String preferredTerm = getPreferedTerm(owlClass, ont);
-      final Set<String> synonyms = getSynonyms(owlClass, ont, preferredTerm);
-      
-      if (preferredTerm == null && synonyms.isEmpty()) {
-        // No labels so display is just the code
-        cdc.setDisplay(code);
-      } else if (preferredTerm == null) {
-        // No prefererd term but there are synonyms so pick any one as the display
-        preferredTerm = synonyms.iterator().next();
-        synonyms.remove(preferredTerm);
-        
-        cdc.setDisplay(preferredTerm);
-        addSynonyms(synonyms, cdc);
-      } else {
-        cdc.setDisplay(preferredTerm);
-        addSynonyms(synonyms, cdc);
-      }
-      
-      cs.addConcept(cdc);
+    // Special case: OWL:Thing
+    if ("http://www.w3.org/2002/07/owl#Thing".equals(cdc.getCode())) {
+      cdc.setDisplay("Thing");
     }
+    
+    final ConceptPropertyComponent importedProp = cdc.addProperty();
+    importedProp.setCode("imported");
+    importedProp.setValue(new BooleanType(!classSystem.equals(rootSystem)));
+
+    boolean isRoot = false;
+    isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot, iriSystemMap, rootSystem);
+
+    ConceptPropertyComponent prop = cdc.addProperty();
+    prop.setCode("root");
+    prop.setValue(new BooleanType(isRoot));
+
+    prop = cdc.addProperty();
+    prop.setCode("deprecated");
+    prop.setValue(new BooleanType(isDeprecated));
+    
+    String preferredTerm = getPreferedTerm(owlClass, ont);
+    final Set<String> synonyms = getSynonyms(owlClass, ont, preferredTerm);
+    
+    if (preferredTerm == null && synonyms.isEmpty()) {
+      String label = iriDisplayMap.get(iri);
+      if (label != null) {
+        cdc.setDisplay(label);
+      } else {
+        cdc.setDisplay(code);
+      }
+    } else if (preferredTerm == null) {
+      // No prefererd term but there are synonyms so pick any one as the display
+      preferredTerm = synonyms.iterator().next();
+      synonyms.remove(preferredTerm);
+      
+      cdc.setDisplay(preferredTerm);
+      addSynonyms(synonyms, cdc);
+    } else {
+      cdc.setDisplay(preferredTerm);
+      addSynonyms(synonyms, cdc);
+    }
+    
+    cs.addConcept(cdc);
   }
   
   private void addSynonyms(Set<String> synonyms, ConceptDefinitionComponent cdc) {
