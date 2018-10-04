@@ -112,12 +112,15 @@ public class FhirOwlService {
    * 
    * @param input The input OWL file.
    * @param output The output FHIR bundle.
+   * @param name The name of the code system. If not present will try to extract from OWL file.
+   * @param includeDeprecated If true includes deprecated concepts.
    * @throws IOException If there is an I/O issue.
    * @throws OWLOntologyCreationException If there is a problem creating the ontology.
    */
-  public void transform(File input, File output) throws IOException, OWLOntologyCreationException {
+  public void transform(File input, File output, String name, boolean includeDeprecated) 
+      throws IOException, OWLOntologyCreationException {
     log.info("Creating code systems");
-    final CodeSystem codeSystem = createCodeSystem(input);
+    final CodeSystem codeSystem = createCodeSystem(input, name, includeDeprecated);
     
     try (BufferedWriter bw = new BufferedWriter(new FileWriter(output))) {
       log.info("Writing code system to file: " + output.getAbsolutePath());
@@ -166,10 +169,13 @@ public class FhirOwlService {
    * Creates a code system for an ontology and its imports.
    * 
    * @param input The ontology to transform.
+   * @param name The name of the code system.
+   * @param includeDeprecated If true, deprecated OWL classes are included.
    * @return The generated code system.
    * @throws OWLOntologyCreationException If something goes wrong creating the ontologies.
    */
-  private CodeSystem createCodeSystem(File input) throws OWLOntologyCreationException {
+  private CodeSystem createCodeSystem(File input, String name, boolean includeDeprecated) 
+      throws OWLOntologyCreationException {
     
     log.info("Loading ontology from file " + input.getAbsolutePath());
     OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
@@ -179,7 +185,6 @@ public class FhirOwlService {
     // Get IRI -> system map - might contain null values
     Set<OWLOntology> closure = manager.getImportsClosure(rootOnt);
     final Map<IRI, String> iriSystemMap = getIriSystemMap(closure);
-    
     
     // Extract labels for all classes
     final Map<IRI, String> iriDisplayMap = new HashMap<>();
@@ -220,7 +225,7 @@ public class FhirOwlService {
     
     // Create code system
     return createCodeSystem(rootOnt, manager.getOWLDataFactory(), reasoner, iriSystemMap, 
-        iriDisplayMap);
+        iriDisplayMap, name, includeDeprecated);
   }
   
   /**
@@ -229,12 +234,16 @@ public class FhirOwlService {
    * @param ont The ontology.
    * @param factory The OWL factory.
    * @param reasoner The OWL reasoner.
-   * @param iriSystemMap  
+   * @param iriSystemMap A map of IRIs to thier system. 
+   * @param iriDisplayMap A map of IRIs to their display.
+   * @param name The name of the code system.
+   * @param includeDeprecated If true, deprecated OWL classes are included.
    * 
    * @return The code system.
    */
   private CodeSystem createCodeSystem(OWLOntology ont, final OWLDataFactory factory, 
-      OWLReasoner reasoner, Map<IRI, String> iriSystemMap, Map<IRI, String> iriDisplayMap) {
+      OWLReasoner reasoner, Map<IRI, String> iriSystemMap, Map<IRI, String> iriDisplayMap, 
+      String name, boolean includeDperecated) {
     // Extract ontology information
     final String codeSystemUrl;
     final String codeSystemVersion;
@@ -255,7 +264,7 @@ public class FhirOwlService {
       codeSystemVersion = "NA";
     }
     
-    String codeSystemName = codeSystemUrl;
+    String codeSystemName = null;
     String publisher = null;
     String description = null;
     
@@ -275,9 +284,13 @@ public class FhirOwlService {
       }
     }
 
-    if (annMap.containsKey("http://www.w3.org/2000/01/rdf-schema#label")) {
+    if (name != null) {
+      codeSystemName = name;
+    } else if (annMap.containsKey("http://www.w3.org/2000/01/rdf-schema#label")) {
       // This is the name of the ontology
       codeSystemName = annMap.get("http://www.w3.org/2000/01/rdf-schema#label").get(0);
+    } else {
+      codeSystemName = codeSystemUrl;
     }
 
     for (String publisherElem : publisherElems) {
@@ -351,7 +364,8 @@ public class FhirOwlService {
     cs.addFilter().setCode("imported").addOperator(FilterOperator.EQUAL).setValue("True or false");
     
     for (OWLClass owlClass : ont.getClassesInSignature(Imports.INCLUDED)) {
-      processClass(owlClass, cs, ont, reasoner, iriSystemMap, codeSystemUrl, iriDisplayMap);
+      processClass(owlClass, cs, ont, reasoner, iriSystemMap, codeSystemUrl, iriDisplayMap, 
+          includeDperecated);
     }
 
     return cs;
@@ -623,19 +637,28 @@ public class FhirOwlService {
    * @param iriSystemMap A map of IRIs to systems.
    * @param rootSystem The root system.
    * @param iriDisplayMap A map with the displays for all concepts.
+   * @param includeDeprecated
    * 
    */
   private void processClass(OWLClass owlClass, CodeSystem cs, OWLOntology ont, 
       OWLReasoner reasoner, Map<IRI, String> iriSystemMap, String rootSystem, 
-      Map<IRI, String> iriDisplayMap) {
+      Map<IRI, String> iriDisplayMap, boolean includeDeprecated) {
+    
+    if (owlClass.isOWLNothing()) {
+      return;
+    }
+    
+    final boolean isDeprecated = isDeprecated(owlClass, ont);
+    if (!includeDeprecated && isDeprecated) {
+      return; // Skip this concept because it is deprecated
+    }
+    
     final IRI iri = owlClass.getIRI();
     final String classSystem = iriSystemMap.get(iri);
     final String code =  classSystem.equals(rootSystem) ? iri.getShortForm() : iri.toString();
     
     final ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
     cdc.setCode(code);
-
-    final boolean isDeprecated = isDeprecated(owlClass, ont);
 
     // Special case: OWL:Thing
     if ("http://www.w3.org/2002/07/owl#Thing".equals(cdc.getCode())) {

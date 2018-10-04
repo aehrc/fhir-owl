@@ -102,17 +102,22 @@ public class Application implements CommandLineRunner {
 
   @Override
   public void run(String... args) throws Exception {
-    if (args.length != 2) {
-      System.out.println("Usage java - jar target/fhir-owl-1.0.jar [input OWL file] "
-          + "[target FHIR JSON file]");
+    if (args.length < 3 || args.length > 4) {
+      System.out.println("Usage java - jar target/fhir-owl-1.0.jar input_OWL_file "
+          + "target_FHIR_JSON_file include_deprecated [code_system_name]");
       exit(0);
     }
     
     final File input = new File(args[0]);
     final File output = new File(args[1]);
+    boolean includeDeprecated = Boolean.parseBoolean(args[2]);
+    String name = null;
+    if (args.length == 4) {
+      name = args[3];
+    }
     
     try {
-      fhirOwlService.transform(input, output);
+      fhirOwlService.transform(input, output, name, includeDeprecated);
     } catch (Throwable t) {
       System.out.println("There was a problem transforming the OWL file into FHIR: " 
           + t.getLocalizedMessage());

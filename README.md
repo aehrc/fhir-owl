@@ -1,6 +1,6 @@
 # OWL to FHIR Transformer
 
-This standalone application transforms an OLW ontology into one or more FHIR CodeSystem resources. 
+This standalone application transforms an OWL ontology into one or more FHIR CodeSystem resources. 
 
 The following are some of the challenges in this transformation:
 
