@@ -428,7 +428,7 @@ public class FhirOwlService {
 
   private boolean addHierarchyFields(final OWLReasoner reasoner, OWLClass owlClass, 
       ConceptDefinitionComponent cdc, boolean isRoot, Map<IRI, String> iriSystemMap, 
-      String rootSystem) {
+      String rootSystem, boolean includeDeprecated) {
     // Add hierarchy-related fields
     final Set<OWLClass> parents = reasoner.getSuperClasses(owlClass, true).getFlattened();
     
@@ -437,6 +437,15 @@ public class FhirOwlService {
       if (parent.isOWLNothing()) { 
         continue;
       }
+      
+      // If excluding deprecated class then also exclude from parents. In some ontologies
+      // deprecated classes are still in the hierarchy, e.g. MONDO.
+      if (!includeDeprecated) {
+        if (isDeprecated(parent, reasoner.getRootOntology())) {
+          continue;
+        }
+      }
+      
       final IRI iri = parent.getIRI();
       final String system = iriSystemMap.get(iri);
       if (system != null) {
@@ -670,7 +679,8 @@ public class FhirOwlService {
     importedProp.setValue(new BooleanType(!classSystem.equals(rootSystem)));
 
     boolean isRoot = false;
-    isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot, iriSystemMap, rootSystem);
+    isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot, iriSystemMap, rootSystem, 
+        includeDeprecated);
 
     ConceptPropertyComponent prop = cdc.addProperty();
     prop.setCode("root");
