@@ -15,6 +15,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,11 +72,17 @@ public class FhirOwlService {
   
   private static final Log log = LogFactory.getLog(FhirOwlService.class);
   
-  @Value("#{'${ontoserver.owl.publisher}'.split(',')}")
-  private List<String> publisherElems;
+  @Value("#{'${ontoserver.owl.defaults.publisher}'.split(',')}")
+  private List<String> defaultPublisherProps;
 
-  @Value("#{'${ontoserver.owl.description}'.split(',')}")
-  private List<String> descriptionElems;
+  @Value("#{'${ontoserver.owl.defaults.description}'.split(',')}")
+  private List<String> defaultDescriptionProps;
+  
+  @Value("${ontoserver.owl.defaults.preferredTerm}")
+  private String defaultPreferredTermProp;
+  
+  @Value("#{'${ontoserver.owl.defaults.synonym}'.split(',')}")
+  private List<String> defautSynonymProps;
   
   @Autowired
   private FhirContext ctx;
@@ -112,15 +120,32 @@ public class FhirOwlService {
    * 
    * @param input The input OWL file.
    * @param output The output FHIR bundle.
-   * @param name The name of the code system. If not present will try to extract from OWL file.
+   * @param url The URL of the code system.
+   * @param name The name of the code system. If not present the system will try to extract from 
+   *     the OWL file.
    * @param includeDeprecated If true includes deprecated concepts.
+   * @param publisherProperties The OWL annotation properties that contain the code system 
+   *     publisher.
+   * @param descriptionProperties The OWL annotation properties that contain the code system 
+   *     description.
+   * @param codeProperty The OWL annotation property that contains the codes for each concept.
+   * @param displayProperty The OWL annotation property that contains the displays for each 
+   *     concept.
+   * @param synonymProperties A list of OWL annotation properties that contain synonyms for each 
+   *     concept.
+   * 
    * @throws IOException If there is an I/O issue.
    * @throws OWLOntologyCreationException If there is a problem creating the ontology.
    */
-  public void transform(File input, File output, String name, boolean includeDeprecated) 
+  public void transform(File input, File output, String url, String name, 
+      boolean includeDeprecated, List<String> publisherProperties, 
+      List<String> descriptionProperties, String codeProperty, String displayProperty, 
+      List<String> synonymProperties) 
       throws IOException, OWLOntologyCreationException {
     log.info("Creating code systems");
-    final CodeSystem codeSystem = createCodeSystem(input, name, includeDeprecated);
+    final CodeSystem codeSystem = createCodeSystem(input, url, name, includeDeprecated, 
+        publisherProperties, descriptionProperties, codeProperty, displayProperty, 
+        synonymProperties);
     
     try (BufferedWriter bw = new BufferedWriter(new FileWriter(output))) {
       log.info("Writing code system to file: " + output.getAbsolutePath());
@@ -165,22 +190,80 @@ public class FhirOwlService {
     return sb.toString();
   }
   
-  /**
-   * Creates a code system for an ontology and its imports.
-   * 
-   * @param input The ontology to transform.
-   * @param name The name of the code system.
-   * @param includeDeprecated If true, deprecated OWL classes are included.
-   * @return The generated code system.
-   * @throws OWLOntologyCreationException If something goes wrong creating the ontologies.
-   */
-  private CodeSystem createCodeSystem(File input, String name, boolean includeDeprecated) 
+  private List<OWLAnnotationProperty> loadProps(OWLDataFactory factory, List<String> args, 
+      List<String> defaults, OWLAnnotationProperty lastResort) {
+    final List<OWLAnnotationProperty> res = new ArrayList<>();
+    if (args != null && !args.isEmpty()) {
+      for (String prop : args) {
+        res.add(factory.getOWLAnnotationProperty(IRI.create(prop)));
+        log.info("Loading synonyms from OWL annotation property " + prop);
+      }      
+    } else if (defaults != null && !defaults.isEmpty()) {
+      for (String prop : defaults) {
+        res.add(factory.getOWLAnnotationProperty(IRI.create(prop)));
+        log.info("Loading synonyms from OWL annotation property " + prop);
+      }  
+    } else {
+      if (lastResort != null) {
+        res.add(lastResort);
+        log.info("Loading synonyms from " + lastResort.toStringID());
+      }
+    }
+    return res;
+  }
+  
+  private OWLAnnotationProperty loadProp(OWLDataFactory factory, String arg, 
+      String defaultProp, OWLAnnotationProperty lastResort) {
+    OWLAnnotationProperty res = null;
+    if (arg != null) {
+      res = factory.getOWLAnnotationProperty(IRI.create(arg));
+      log.info("Loading synonyms from OWL annotation property " + arg);
+    } else if (defaultProp != null) {
+      res = factory.getOWLAnnotationProperty(IRI.create(defaultProp));
+      log.info("Loading synonyms from OWL annotation property " + defaultProp); 
+    } else {
+      if (lastResort != null) {
+        res = lastResort;
+        log.info("Loading synonyms from " + lastResort.toStringID());
+      }
+    }
+    return res;
+  }
+  
+  private CodeSystem createCodeSystem(File input, String url, String name, 
+      boolean includeDeprecated, List<String> publisherProperties, 
+      List<String> descriptionProperties, String codeProperty, String displayProperty, 
+      List<String> synonymProperties) 
       throws OWLOntologyCreationException {
     
     log.info("Loading ontology from file " + input.getAbsolutePath());
     OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
     addIriMappings(manager);
     final OWLOntology rootOnt = manager.loadOntologyFromOntologyDocument(input);
+    
+    // Load annotation properties to populate code-system-level properties
+    
+    // Publisher
+    final OWLDataFactory factory = manager.getOWLDataFactory();
+    final List<OWLAnnotationProperty> publisherProps = loadProps(factory, publisherProperties, 
+        defaultPublisherProps, null);
+    
+    // Description
+    final List<OWLAnnotationProperty> descriptionProps = loadProps(factory, descriptionProperties, 
+        defaultDescriptionProps, null);
+    
+    // Load annotation properties to extract concept-level attributes
+    log.info("Loading annotation properties");
+    // Code
+    final OWLAnnotationProperty codeProp = loadProp(factory, codeProperty, null, null);
+    
+    // Preferred terms, a.k.a. display
+    final OWLAnnotationProperty preferredTermProp = loadProp(factory, displayProperty, 
+        defaultPreferredTermProp, factory.getRDFSLabel());
+    
+    // Synonyms
+    final List<OWLAnnotationProperty> synomynProps = loadProps(factory, synonymProperties, 
+        defautSynonymProps, factory.getRDFSLabel());
     
     // Get IRI -> system map - might contain null values
     Set<OWLOntology> closure = manager.getImportsClosure(rootOnt);
@@ -195,7 +278,7 @@ public class FhirOwlService {
     for (OWLOntology ont : closure) {
       for (OWLClass oc : ont.getClassesInSignature()) {
         if (iriDisplayMap.containsKey(oc.getIRI())) {
-          String pt = getPreferedTerm(oc, ont);
+          String pt = getPreferedTerm(oc, ont, preferredTermProp);
           if (pt != null) {
             iriDisplayMap.put(oc.getIRI(), pt);
           }
@@ -222,10 +305,11 @@ public class FhirOwlService {
     OWLReasonerFactory reasonerFactory = new ElkReasonerFactory();
     OWLReasoner reasoner = reasonerFactory.createReasoner(rootOnt);
     reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY);
-    
+
     // Create code system
     return createCodeSystem(rootOnt, manager.getOWLDataFactory(), reasoner, iriSystemMap, 
-        iriDisplayMap, name, includeDeprecated);
+        iriDisplayMap, url, name, includeDeprecated, publisherProps, descriptionProps, codeProp, 
+        preferredTermProp, synomynProps);
   }
   
   /**
@@ -238,12 +322,20 @@ public class FhirOwlService {
    * @param iriDisplayMap A map of IRIs to their display.
    * @param name The name of the code system.
    * @param includeDeprecated If true, deprecated OWL classes are included.
+   * @param codeProp OWL annotation property that contains the code or null.
+   * @param preferredTermProp OWL annotation property that contains the preferred 
+   *     term.
+   * @param synonymProps List of OWL annotation properties that contain synonyms.
    * 
    * @return The code system.
    */
   private CodeSystem createCodeSystem(OWLOntology ont, final OWLDataFactory factory, 
       OWLReasoner reasoner, Map<IRI, String> iriSystemMap, Map<IRI, String> iriDisplayMap, 
-      String name, boolean includeDperecated) {
+      String url, String name, boolean includeDperecated, 
+      List<OWLAnnotationProperty> publisherProps, List<OWLAnnotationProperty> descriptionProps, 
+      OWLAnnotationProperty codeProp, OWLAnnotationProperty preferredTermProp, 
+      List<OWLAnnotationProperty> synonymProps) {
+    
     // Extract ontology information
     final String codeSystemUrl;
     final String codeSystemVersion;
@@ -251,8 +343,10 @@ public class FhirOwlService {
     final OWLOntologyID ontId = ont.getOntologyID();
     final Optional<IRI> iri = ontId.getOntologyIRI();
     final Optional<IRI> version = ontId.getVersionIRI();
-
-    if (iri.isPresent()) {
+    
+    if (url != null) {
+      codeSystemUrl = url;
+    } else if (iri.isPresent()) {
       codeSystemUrl = iri.get().toString();
     } else {
       throw new NoIdException();
@@ -265,48 +359,17 @@ public class FhirOwlService {
     }
     
     String codeSystemName = null;
-    String publisher = null;
-    String description = null;
-    
-    // Index annotations
-    final Map<String, List<String>> annMap = new HashMap<>();
 
-    for (OWLAnnotation ann : ont.getAnnotations()) {
-      final String prop = ann.getProperty().getIRI().toString();
-      Optional<OWLLiteral> val = ann.getValue().asLiteral();
-      if (val.isPresent()) {
-        List<String> vals = annMap.get(prop);
-        if (vals == null) {
-          vals = new ArrayList<>();
-          annMap.put(prop, vals);
-        }
-        vals.add(val.get().getLiteral());
-      }
-    }
-
+    // Extract code system name
     if (name != null) {
       codeSystemName = name;
-    } else if (annMap.containsKey("http://www.w3.org/2000/01/rdf-schema#label")) {
-      // This is the name of the ontology
-      codeSystemName = annMap.get("http://www.w3.org/2000/01/rdf-schema#label").get(0);
     } else {
-      codeSystemName = codeSystemUrl;
-    }
-
-    for (String publisherElem : publisherElems) {
-      if (annMap.containsKey(publisherElem)) {
-        // This is the publisher of the ontology
-        // Get first publisher - FHIR spec only supports one
-        publisher = annMap.get(publisherElem).get(0); 
-        break;
-      }
-    }
-
-    for (String descriptionElem : descriptionElems) {
-      if (annMap.containsKey(descriptionElem)) {
-        // This is the description of the ontology
-        description = annMap.get(descriptionElem).get(0);
-        break;
+      String label = getOntologyAnnotationValue(ont, 
+          Arrays.asList(new OWLAnnotationProperty[] { factory.getRDFSLabel() }));
+      if (label != null) {
+        codeSystemName = label;
+      } else {
+        codeSystemName = codeSystemUrl;
       }
     }
     
@@ -318,9 +381,13 @@ public class FhirOwlService {
     cs.setUrl(codeSystemUrl);
     cs.setVersion(codeSystemVersion);
     cs.setName(codeSystemName);
+    
+    final String publisher = getOntologyAnnotationValue(ont, publisherProps);
     if (publisher != null) { 
       cs.setPublisher(publisher);
     }
+    
+    String description = getOntologyAnnotationValue(ont, descriptionProps);
     if (description != null) {
       cs.setDescription(description);
     }
@@ -363,9 +430,12 @@ public class FhirOwlService {
       .setValue("True or false.");
     cs.addFilter().setCode("imported").addOperator(FilterOperator.EQUAL).setValue("True or false");
     
+    // Determine if there are imports
+    boolean hasImports = !ont.getImportsDeclarations().isEmpty();
+    
     for (OWLClass owlClass : ont.getClassesInSignature(Imports.INCLUDED)) {
       processClass(owlClass, cs, ont, reasoner, iriSystemMap, codeSystemUrl, iriDisplayMap, 
-          includeDperecated);
+          includeDperecated, codeProp, preferredTermProp, synonymProps, hasImports);
     }
 
     return cs;
@@ -375,8 +445,6 @@ public class FhirOwlService {
    * Iterates over all the concepts in the closure of an ontology an attempts to determine
    * the system for each one.
    * 
-   * @param rootOnt The root ontology.
-   * @param manager The ontology manager.
    * @param closure Used to return the ontology closure.
    * @return A map of IRIs to systems.
    * 
@@ -404,7 +472,7 @@ public class FhirOwlService {
       }
     }
     
-    // 3. Create a IRI -> system map for all classes in the closure
+    // 2. Create a IRI -> system map for all classes in the closure
     log.info("Building IRI -> system map");
     final Map<IRI, String> iriSystemMap = new HashMap<>();
     for (OWLOntology ont : closure) {
@@ -504,10 +572,22 @@ public class FhirOwlService {
     return isDeprecated;
   }
   
-  private String getPreferedTerm(OWLClass owlClass, OWLOntology ont) {
-    final OWLDataFactory factory = ont.getOWLOntologyManager().getOWLDataFactory();
-    for (OWLAnnotation a : EntitySearcher.getAnnotations(owlClass, ont, 
-        factory.getRDFSLabel())) {
+  private String getOntologyAnnotationValue(OWLOntology ont, 
+      Collection<OWLAnnotationProperty> props) {
+    for (OWLAnnotation ann : ont.getAnnotations()) {
+      if (props.contains(ann.getProperty())) {
+        Optional<OWLLiteral> val = ann.getValue().asLiteral();
+        if (val.isPresent()) {
+          return val.get().getLiteral();
+        }
+      }
+    }
+    return null;
+  }
+  
+  
+  private String getCode(OWLClass owlClass, OWLOntology ont, OWLAnnotationProperty prop) {
+    for (OWLAnnotation a : EntitySearcher.getAnnotations(owlClass, ont, prop)) {
       OWLAnnotationValue val = a.getValue();
       if (val instanceof OWLLiteral) {
         return ((OWLLiteral) val).getLiteral();
@@ -517,30 +597,30 @@ public class FhirOwlService {
     return null;
   }
   
-  private Set<String> getSynonyms(OWLClass owlClass, OWLOntology ont, String preferredTerm) {
-    final OWLDataFactory factory = ont.getOWLOntologyManager().getOWLDataFactory();
+  private String getPreferedTerm(OWLClass owlClass, OWLOntology ont, 
+      OWLAnnotationProperty preferredTermAnnotationProperty) {
     
-    final Set<String> synonyms = new HashSet<>();
     for (OWLAnnotation a : EntitySearcher.getAnnotations(owlClass, ont, 
-        factory.getRDFSLabel())) {
+        preferredTermAnnotationProperty)) {
       OWLAnnotationValue val = a.getValue();
       if (val instanceof OWLLiteral) {
-        final String label = ((OWLLiteral) val).getLiteral();
-        synonyms.add(label);
+        return ((OWLLiteral) val).getLiteral();
       }
     }
     
-    for (OWLAnnotation ann : EntitySearcher.getAnnotationObjects(owlClass, ont)) {
-      OWLAnnotationProperty prop = ann.getProperty();
-      if (prop != null && prop.getIRI().getShortForm().equals("hasExactSynonym")) {
-        // This is an oboInOwl extension
-        OWLAnnotationValue val = ann.getValue();
-        if (val != null) {
-          Optional<OWLLiteral> lit = val.asLiteral();
-          if (lit.isPresent()) {
-            String label = lit.get().getLiteral();
-            synonyms.add(label);
-          }
+    return null;
+  }
+  
+  private Set<String> getSynonyms(OWLClass owlClass, OWLOntology ont, String preferredTerm, 
+      List<OWLAnnotationProperty> synonymAnnotationProperties) {
+    
+    final Set<String> synonyms = new HashSet<>();
+    for (OWLAnnotationProperty prop : synonymAnnotationProperties) {
+      for (OWLAnnotation a : EntitySearcher.getAnnotations(owlClass, ont, prop)) {
+        OWLAnnotationValue val = a.getValue();
+        if (val instanceof OWLLiteral) {
+          final String label = ((OWLLiteral) val).getLiteral();
+          synonyms.add(label);
         }
       }
     }
@@ -636,22 +716,13 @@ public class FhirOwlService {
     return shortForm.split("[_]")[0];
   }
   
-  /**
-   * Adds this concept to the code system.
-   * 
-   * @param owlClass The concept to add.
-   * @param cs The code system where the concept will be added.
-   * @param ont The ontology. Needed to search for the labels of the concept.
-   * @param reasoner The reasoner. Required to get the parents of a concept.
-   * @param iriSystemMap A map of IRIs to systems.
-   * @param rootSystem The root system.
-   * @param iriDisplayMap A map with the displays for all concepts.
-   * @param includeDeprecated
-   * 
-   */
   private void processClass(OWLClass owlClass, CodeSystem cs, OWLOntology ont, 
       OWLReasoner reasoner, Map<IRI, String> iriSystemMap, String rootSystem, 
-      Map<IRI, String> iriDisplayMap, boolean includeDeprecated) {
+      Map<IRI, String> iriDisplayMap, boolean includeDeprecated, 
+      OWLAnnotationProperty codeProp,
+      OWLAnnotationProperty preferredTermProp, 
+      List<OWLAnnotationProperty> synonymProps,
+      boolean hasImports) {
     
     if (owlClass.isOWLNothing()) {
       return;
@@ -664,7 +735,15 @@ public class FhirOwlService {
     
     final IRI iri = owlClass.getIRI();
     final String classSystem = iriSystemMap.get(iri);
-    final String code =  classSystem.equals(rootSystem) ? iri.getShortForm() : iri.toString();
+    
+    // The code might come from an annotation property
+    String code = null;
+    if (codeProp != null) {
+      code = getCode(owlClass, ont, codeProp);
+    } 
+    if (code == null) {
+      code = classSystem.equals(rootSystem) ? iri.getShortForm() : iri.toString();
+    }
     
     final ConceptDefinitionComponent cdc = new ConceptDefinitionComponent();
     cdc.setCode(code);
@@ -676,7 +755,13 @@ public class FhirOwlService {
     
     final ConceptPropertyComponent importedProp = cdc.addProperty();
     importedProp.setCode("imported");
-    importedProp.setValue(new BooleanType(!classSystem.equals(rootSystem)));
+    // This is hard to detect appropriately because the classes declared in an ontology
+    // can be declared with an arbitrary namespace.
+    if (!hasImports) {
+      importedProp.setValue(new BooleanType(false));
+    } else {
+      importedProp.setValue(new BooleanType(!classSystem.equals(rootSystem)));
+    }
 
     boolean isRoot = false;
     isRoot = addHierarchyFields(reasoner, owlClass, cdc, isRoot, iriSystemMap, rootSystem, 
@@ -690,8 +775,8 @@ public class FhirOwlService {
     prop.setCode("deprecated");
     prop.setValue(new BooleanType(isDeprecated));
     
-    String preferredTerm = getPreferedTerm(owlClass, ont);
-    final Set<String> synonyms = getSynonyms(owlClass, ont, preferredTerm);
+    String preferredTerm = getPreferedTerm(owlClass, ont, preferredTermProp);
+    final Set<String> synonyms = getSynonyms(owlClass, ont, preferredTerm, synonymProps);
     
     if (preferredTerm == null && synonyms.isEmpty()) {
       String label = iriDisplayMap.get(iri);
