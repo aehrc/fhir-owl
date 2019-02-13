@@ -119,7 +119,7 @@ public class FhirOwlService {
    * Transforms an OWL file into a bundle of FHIR code systems.
    * 
    * @param input The input OWL file.
-   * @param output The output FHIR bundle.
+   * @param output The output FHIR code system.
    * @param url The URL of the code system.
    * @param name The name of the code system. If not present the system will try to extract from 
    *     the OWL file.
