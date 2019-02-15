@@ -6,7 +6,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 import java.lang.reflect.Type;
-import org.hl7.fhir.dstu3.model.Bundle;
+
+import org.hl7.fhir.r4.model.Bundle;
 
 public class CustomBundleSerialiser implements JsonSerializer<Bundle> {
 

@@ -25,19 +25,20 @@ import java.util.Set;
 import javax.annotation.PostConstruct;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.hl7.fhir.dstu3.model.BooleanType;
-import org.hl7.fhir.dstu3.model.CodeSystem;
-import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemContentMode;
-import org.hl7.fhir.dstu3.model.CodeSystem.CodeSystemHierarchyMeaning;
-import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionComponent;
-import org.hl7.fhir.dstu3.model.CodeSystem.ConceptDefinitionDesignationComponent;
-import org.hl7.fhir.dstu3.model.CodeSystem.ConceptPropertyComponent;
-import org.hl7.fhir.dstu3.model.CodeSystem.FilterOperator;
-import org.hl7.fhir.dstu3.model.CodeSystem.PropertyComponent;
-import org.hl7.fhir.dstu3.model.CodeSystem.PropertyType;
-import org.hl7.fhir.dstu3.model.CodeType;
-import org.hl7.fhir.dstu3.model.Coding;
-import org.hl7.fhir.dstu3.model.Enumerations.PublicationStatus;
+import org.hl7.fhir.r4.model.BooleanType;
+import org.hl7.fhir.r4.model.CodeSystem;
+import org.hl7.fhir.r4.model.CodeSystem.CodeSystemContentMode;
+import org.hl7.fhir.r4.model.CodeSystem.CodeSystemHierarchyMeaning;
+import org.hl7.fhir.r4.model.CodeSystem.ConceptDefinitionComponent;
+import org.hl7.fhir.r4.model.CodeSystem.ConceptDefinitionDesignationComponent;
+import org.hl7.fhir.r4.model.CodeSystem.ConceptPropertyComponent;
+import org.hl7.fhir.r4.model.CodeSystem.FilterOperator;
+import org.hl7.fhir.r4.model.CodeSystem.PropertyComponent;
+import org.hl7.fhir.r4.model.CodeSystem.PropertyType;
+import org.hl7.fhir.r4.model.CodeType;
+import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Enumerations.PublicationStatus;
+import org.hl7.fhir.r4.model.Identifier;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.IRI;
@@ -121,6 +122,8 @@ public class FhirOwlService {
    * @param input The input OWL file.
    * @param output The output FHIR code system.
    * @param url The URL of the code system.
+   * @param identifiers Additional business identifiers of the code system.
+   * @param version The business version of the code system/
    * @param name The name of the code system. If not present the system will try to extract from 
    *     the OWL file.
    * @param includeDeprecated If true includes deprecated concepts.
@@ -137,15 +140,23 @@ public class FhirOwlService {
    * @throws IOException If there is an I/O issue.
    * @throws OWLOntologyCreationException If there is a problem creating the ontology.
    */
-  public void transform(File input, File output, String url, String name, 
-      boolean includeDeprecated, List<String> publisherProperties, 
-      List<String> descriptionProperties, String codeProperty, String displayProperty, 
+  public void transform(
+      File input, 
+      File output, 
+      String url, 
+      List<Identifier> identifiers,
+      String version,
+      String name, 
+      boolean includeDeprecated, 
+      List<String> publisherProperties, 
+      List<String> descriptionProperties, 
+      String codeProperty, String displayProperty, 
       List<String> synonymProperties) 
       throws IOException, OWLOntologyCreationException {
     log.info("Creating code systems");
-    final CodeSystem codeSystem = createCodeSystem(input, url, name, includeDeprecated, 
-        publisherProperties, descriptionProperties, codeProperty, displayProperty, 
-        synonymProperties);
+    final CodeSystem codeSystem = createCodeSystem(input, url, identifiers, version, name, 
+        includeDeprecated, publisherProperties, descriptionProperties, codeProperty, 
+        displayProperty, synonymProperties);
     
     try (BufferedWriter bw = new BufferedWriter(new FileWriter(output))) {
       log.info("Writing code system to file: " + output.getAbsolutePath());
@@ -230,11 +241,18 @@ public class FhirOwlService {
     return res;
   }
   
-  private CodeSystem createCodeSystem(File input, String url, String name, 
-      boolean includeDeprecated, List<String> publisherProperties, 
-      List<String> descriptionProperties, String codeProperty, String displayProperty, 
-      List<String> synonymProperties) 
-      throws OWLOntologyCreationException {
+  private CodeSystem createCodeSystem(
+      File input, 
+      String url,
+      List<Identifier> identifiers,
+      String version,
+      String name, 
+      boolean includeDeprecated, 
+      List<String> publisherProperties, 
+      List<String> descriptionProperties, 
+      String codeProperty, 
+      String displayProperty, 
+      List<String> synonymProperties) throws OWLOntologyCreationException {
     
     log.info("Loading ontology from file " + input.getAbsolutePath());
     OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
@@ -308,8 +326,8 @@ public class FhirOwlService {
 
     // Create code system
     return createCodeSystem(rootOnt, manager.getOWLDataFactory(), reasoner, iriSystemMap, 
-        iriDisplayMap, url, name, includeDeprecated, publisherProps, descriptionProps, codeProp, 
-        preferredTermProp, synomynProps);
+        iriDisplayMap, url, identifiers, version, name, includeDeprecated, publisherProps, 
+        descriptionProps, codeProp, preferredTermProp, synomynProps);
   }
   
   /**
@@ -329,20 +347,36 @@ public class FhirOwlService {
    * 
    * @return The code system.
    */
-  private CodeSystem createCodeSystem(OWLOntology ont, final OWLDataFactory factory, 
-      OWLReasoner reasoner, Map<IRI, String> iriSystemMap, Map<IRI, String> iriDisplayMap, 
-      String url, String name, boolean includeDperecated, 
-      List<OWLAnnotationProperty> publisherProps, List<OWLAnnotationProperty> descriptionProps, 
-      OWLAnnotationProperty codeProp, OWLAnnotationProperty preferredTermProp, 
+  private CodeSystem createCodeSystem(
+      OWLOntology ont, 
+      final OWLDataFactory factory, 
+      OWLReasoner reasoner, 
+      Map<IRI, String> iriSystemMap, 
+      Map<IRI, String> iriDisplayMap, 
+      String url,
+      List<Identifier> identifiers,
+      String version,
+      String name, 
+      boolean includeDperecated, 
+      List<OWLAnnotationProperty> publisherProps, 
+      List<OWLAnnotationProperty> descriptionProps, 
+      OWLAnnotationProperty codeProp, 
+      OWLAnnotationProperty preferredTermProp, 
       List<OWLAnnotationProperty> synonymProps) {
     
     // Extract ontology information
     final String codeSystemUrl;
-    final String codeSystemVersion;
 
     final OWLOntologyID ontId = ont.getOntologyID();
     final Optional<IRI> iri = ontId.getOntologyIRI();
-    final Optional<IRI> version = ontId.getVersionIRI();
+    if (version == null) {
+      final Optional<IRI> v = ontId.getVersionIRI();
+      if (v.isPresent()) {
+        version = v.get().toString();
+      } else {
+        version = "NA";
+      }
+    }
     
     if (url != null) {
       codeSystemUrl = url;
@@ -352,11 +386,7 @@ public class FhirOwlService {
       throw new NoIdException();
     }
 
-    if (version.isPresent()) {
-      codeSystemVersion = version.get().toString();
-    } else {
-      codeSystemVersion = "NA";
-    }
+    
     
     String codeSystemName = null;
 
@@ -379,7 +409,9 @@ public class FhirOwlService {
     // Populate basic code system info
     final CodeSystem cs = new CodeSystem();
     cs.setUrl(codeSystemUrl);
-    cs.setVersion(codeSystemVersion);
+    // TODO: add identifiers
+    
+    cs.setVersion(version);
     cs.setName(codeSystemName);
     
     final String publisher = getOntologyAnnotationValue(ont, publisherProps);

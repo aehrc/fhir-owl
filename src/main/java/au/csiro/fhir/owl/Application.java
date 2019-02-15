@@ -29,7 +29,8 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.hl7.fhir.dstu3.model.Bundle;
+import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Identifier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.Banner;
 import org.springframework.boot.CommandLineRunner;
@@ -51,7 +52,7 @@ public class Application implements CommandLineRunner {
    */
   @Bean
   public FhirContext fhirContext() {
-    return FhirContext.forDstu3();
+    return FhirContext.forR4();
   }
   
   /**
@@ -122,7 +123,6 @@ public class Application implements CommandLineRunner {
 
   @Override
   public void run(String... args) throws Exception {
-  
     Options options = new Options();
     options.addOption(
         Option.builder("i")
@@ -142,6 +142,10 @@ public class Application implements CommandLineRunner {
     );
     options.addOption("a", "include-deprecated", false, "Include deprecated.");
     options.addOption("u", "url", true, "Code system url.");
+    options.addOption("b", "identifier", true, "Comma-separated list of additional business "
+        + "identifiers. Each business identifer has the format [system]|[value].");
+    options.addOption("v", "version", true, "Code system version. If empty the version of the "
+        + "ontology will be used.");
     options.addOption("n", "name", true, "Code system name.");
     options.addOption("p", "publisher", true, "Comma-separated list of OWL annotation properties "
         + "that contain the code system publisher.");
@@ -162,6 +166,8 @@ public class Application implements CommandLineRunner {
       final File input = new File(line.getOptionValue("i"));
       final File output = new File(line.getOptionValue("o"));
       String url = line.hasOption('u') ? line.getOptionValue('u') : null;
+      String identifiersArgs = line.hasOption('b') ? line.getOptionValue('b') : null;
+      String version = line.hasOption('v') ? line.getOptionValue('v') : null;
       String name = line.hasOption('n') ? line.getOptionValue('n') : null;
       boolean includeDeprecated = line.hasOption('a');
       final List<String> publisherProps = new ArrayList<>();
@@ -180,8 +186,9 @@ public class Application implements CommandLineRunner {
       }
       
       try {
-        fhirOwlService.transform(input, output, url, name, includeDeprecated, publisherProps, 
-            descriptionProps, codeProp, displayProp, synonymProps);
+        fhirOwlService.transform(input, output, url, processIdentifierArgs(identifiersArgs), 
+            version, name, includeDeprecated, publisherProps, descriptionProps, codeProp, 
+            displayProp, synonymProps);
       } catch (Throwable t) {
         System.out.println("There was a problem transforming the OWL file into FHIR: " 
             + t.getLocalizedMessage());
@@ -195,6 +202,33 @@ public class Application implements CommandLineRunner {
     }
     
     exit(0);
+  }
+  
+  private List<Identifier> processIdentifierArgs(String args) throws ParseException {
+    if (args == null) {
+      return null;
+    }
+    
+    final List<Identifier> res = new ArrayList<>();
+    String[] parts = args.split("[,]");
+    for (String part : parts) {
+      String[] innerPart = part.split("[|]");
+      if (innerPart.length != 2) {
+        throw new ParseException("Inavlid identifier argument: " + part 
+            + ". Valid format is [system]|[value].");
+      }
+      Identifier i = new Identifier();
+      if (innerPart[0] != null && !innerPart[0].isEmpty()) {
+        i.setSystem(innerPart[0]);
+      }
+      if (innerPart[1] == null || innerPart[1].isEmpty()) {
+        throw new ParseException("Inavlid identifier argument: " + part 
+            + ". Valid format is [system]|[value] and value cannot be empty.");
+      }
+      i.setValue(innerPart[1]);
+      res.add(i);
+    }
+    return res;
   }
 
 }
