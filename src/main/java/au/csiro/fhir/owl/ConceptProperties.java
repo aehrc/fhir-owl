@@ -143,7 +143,7 @@ public class ConceptProperties extends OwlProperties {
   /**
    * Sets the string to replace all the matches of codeReplaceSource in all codes.
    * 
-   * @param codeReplaceTarget the codeReplaceTarget to set
+   * @param replacementStringInCodes the codeReplaceTarget to set
    */
   public void setReplacementStringInCodes(String replacementStringInCodes) {
     this.replacementStringInCodes = replacementStringInCodes;
