@@ -33,6 +33,7 @@ import org.apache.commons.logging.LogFactory;
 import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.CodeSystem;
 import org.hl7.fhir.r4.model.CodeSystem.CodeSystemContentMode;
+import org.hl7.fhir.r4.model.CodeSystem.CodeSystemHierarchyMeaning;
 import org.hl7.fhir.r4.model.CodeSystem.ConceptDefinitionComponent;
 import org.hl7.fhir.r4.model.CodeSystem.ConceptDefinitionDesignationComponent;
 import org.hl7.fhir.r4.model.CodeSystem.ConceptPropertyComponent;
@@ -417,6 +418,9 @@ public class FhirOwlService {
       cs.setValueSet(cs.getUrl());
     }
     
+    // Hierarchy meaning - always is-a for OWL ontologies
+    cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
+    
     // Compositional
     cs.setCompositional(csp.isCompositional());
     
@@ -466,8 +470,14 @@ public class FhirOwlService {
     final String replacementStringInCodes = cp.getReplacementStringInCodes();
     
     int count = 0;
-
-    for (OWLClass owlClass : ont.getClassesInSignature(Imports.INCLUDED)) {
+    
+    final Set<OWLClass> classes = ont.getClassesInSignature(Imports.INCLUDED);
+    OWLClass thing = factory.getOWLThing();
+    if (!classes.contains(thing)) {
+      classes.add(thing);
+    }
+    
+    for (OWLClass owlClass : classes) {
       if (processClass(owlClass, cs, ont, reasoner, mainNamespaces, irisInMain, iriDisplayMap, 
           includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports, 
           stringToReplaceInCodes, replacementStringInCodes)) {
