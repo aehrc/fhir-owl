@@ -415,7 +415,7 @@ public class FhirOwlService {
     if (valueset != null) {
       cs.setValueSet(valueset);
     } else {
-      cs.setValueSet(cs.getUrl());
+      cs.setValueSet(createVsUrl(cs.getUrl()));
     }
     
     // Hierarchy meaning - always is-a for OWL ontologies
@@ -489,6 +489,14 @@ public class FhirOwlService {
     cs.setCount(count);
 
     return cs;
+  }
+
+  private String createVsUrl(String url) {    
+    if (url.contains("?")) {
+      return url + "&vs";
+    } else {
+      return url + "?vs";
+    }
   }
 
   private boolean addHierarchyFields(final OWLReasoner reasoner, OWLClass owlClass, 
