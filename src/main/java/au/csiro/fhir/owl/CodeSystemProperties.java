@@ -52,7 +52,7 @@ public class CodeSystemProperties extends OwlProperties {
   private String copyright = null;
   private String valueSet = null;
   private boolean compositional = false;
-  private boolean versionNeeded = true;
+  private boolean versionNeeded = false;
   private String content = "complete";
 
   private final Set<String> contentValues = new HashSet<>(Arrays.asList(

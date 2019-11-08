@@ -27,6 +27,7 @@ public class ConceptProperties extends OwlProperties {
   private List<String> designations = new ArrayList<>();
   private String stringToReplaceInCodes = null;
   private String replacementStringInCodes = null;
+  private List<String> labelsToExclude = new ArrayList<>();
   
   private final List<String> defaultDesignationProps = Arrays.asList(
       new String[] { RDFS_LABEL });
@@ -147,6 +148,25 @@ public class ConceptProperties extends OwlProperties {
    */
   public void setReplacementStringInCodes(String replacementStringInCodes) {
     this.replacementStringInCodes = replacementStringInCodes;
+  }
+  
+  /**
+   * Sets the labels to exclude.
+   * @param s
+   */
+  public void setLabelsToExclude(String s) {
+    labelsToExclude.clear();
+    final List<String> args = Arrays.asList(s.split("[,]"));
+    labelsToExclude.addAll(args);
+  }
+  
+  /**
+   * Returns the labels to exclude.
+   * 
+   * @return the labelsToExclude
+   */
+  public List<String> getLabelsToExclude() {
+    return labelsToExclude;
   }
   
 }

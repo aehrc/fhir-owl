@@ -20,11 +20,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import javax.annotation.PostConstruct;
 
@@ -97,7 +100,7 @@ public class FhirOwlService {
   
   @PostConstruct
   private void init() {
-    log.info("Checking for IRI mappings");
+    log.info("Checking for IRI mappings in home directory " + System.getProperty("user.home"));
     InputStream input = null;
     try {
       input = FhirContext.class.getClassLoader().getResourceAsStream("iri_mappings.txt");
@@ -108,12 +111,19 @@ public class FhirOwlService {
       
       final String[] lines = getLinesFromInputStream(input);
       for (String line : lines) {
+        if (line.startsWith("#")) {
+          continue;
+        }
         String[] parts = line.split("[,]");
-        iriMap.put(IRI.create(parts[0]), IRI.create(new File(parts[1])));
-      }
-      
-      for (IRI key : iriMap.keySet()) {
-        log.info("Loaded IRI mapping " + key.toString() + " -> " + iriMap.get(key).toString());
+        
+        // Check file exists
+        final File tgtFile = new File(System.getProperty("user.home") + parts[1]);
+        if (tgtFile.exists()) {
+          iriMap.put(IRI.create(parts[0]), IRI.create(tgtFile));
+          log.info("Adding mapping " + parts[0] + " -> " +  tgtFile.toString());
+        } else {
+          log.warn("Mapping was not added because file " +  tgtFile.toString() + " does not exist.");
+        }
       }
       
     } catch (Throwable t) {
@@ -238,7 +248,7 @@ public class FhirOwlService {
     for (OWLOntology ont : closure) {
       for (OWLClass oc : ont.getClassesInSignature()) {
         if (iriDisplayMap.containsKey(oc.getIRI())) {
-          String pt = getPreferedTerm(oc, ont, preferredTermProp);
+          String pt = getPreferedTerm(oc, ont, preferredTermProp, Collections.emptyList());
           if (pt != null) {
             iriDisplayMap.put(oc.getIRI(), pt);
           }
@@ -462,12 +472,15 @@ public class FhirOwlService {
     
     // Determine if there are imports
     final boolean hasImports = !ont.getImportsDeclarations().isEmpty();
+    
+    
     final boolean includeDeprecated = csp.isIncludeDeprecated();
     final OWLAnnotationProperty codeProp = cp.getCode(factory);
     final OWLAnnotationProperty preferredTermProp = cp.getDisplay(factory);
     final List<OWLAnnotationProperty> synonymProps = cp.getDesignations(factory);
     final String stringToReplaceInCodes = cp.getStringToReplaceInCodes();
     final String replacementStringInCodes = cp.getReplacementStringInCodes();
+    final List<String> labelsToExclude = cp.getLabelsToExclude();
     
     int count = 0;
     
@@ -480,7 +493,7 @@ public class FhirOwlService {
     for (OWLClass owlClass : classes) {
       if (processClass(owlClass, cs, ont, reasoner, mainNamespaces, irisInMain, iriDisplayMap, 
           includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports, 
-          stringToReplaceInCodes, replacementStringInCodes)) {
+          stringToReplaceInCodes, replacementStringInCodes, labelsToExclude)) {
         count++;
       }
     }
@@ -602,21 +615,30 @@ public class FhirOwlService {
   }
   
   private String getPreferedTerm(OWLClass owlClass, OWLOntology ont, 
-      OWLAnnotationProperty preferredTermAnnotationProperty) {
+      OWLAnnotationProperty preferredTermAnnotationProperty, List<String> labelsToExclude) {
     
+    SortedSet<String> candidates = new TreeSet<>();
     for (OWLAnnotation a : EntitySearcher.getAnnotations(owlClass, ont, 
         preferredTermAnnotationProperty)) {
       OWLAnnotationValue val = a.getValue();
       if (val instanceof OWLLiteral) {
-        return ((OWLLiteral) val).getLiteral();
+        String label = ((OWLLiteral) val).getLiteral();
+        
+        if (!labelsToExclude.contains(label)) {
+          candidates.add(label);
+        }
       }
     }
     
-    return null;
+    if (!candidates.isEmpty()) {
+      return candidates.first();
+    } else {
+      return null;
+    }
   }
   
   private Set<String> getSynonyms(OWLClass owlClass, OWLOntology ont, String preferredTerm, 
-      List<OWLAnnotationProperty> synonymAnnotationProperties) {
+      List<OWLAnnotationProperty> synonymAnnotationProperties, List<String> labelsToExclude) {
     
     final Set<String> synonyms = new HashSet<>();
     for (OWLAnnotationProperty prop : synonymAnnotationProperties) {
@@ -624,7 +646,9 @@ public class FhirOwlService {
         OWLAnnotationValue val = a.getValue();
         if (val instanceof OWLLiteral) {
           final String label = ((OWLLiteral) val).getLiteral();
-          synonyms.add(label);
+          if (!labelsToExclude.contains(label)) {
+            synonyms.add(label);
+          }
         }
       }
     }
@@ -705,7 +729,8 @@ public class FhirOwlService {
       List<OWLAnnotationProperty> synonymProps,
       boolean hasImports,
       String stringToReplaceInCodes,
-      String replacementStringInCodes) {
+      String replacementStringInCodes,
+      List<String> labelsToExclude) {
     
     if (owlClass.isOWLNothing()) {
       return false;
@@ -761,8 +786,9 @@ public class FhirOwlService {
     prop.setCode("deprecated");
     prop.setValue(new BooleanType(isDeprecated));
     
-    String preferredTerm = getPreferedTerm(owlClass, ont, preferredTermProp);
-    final Set<String> synonyms = getSynonyms(owlClass, ont, preferredTerm, synonymProps);
+    String preferredTerm = getPreferedTerm(owlClass, ont, preferredTermProp, labelsToExclude);
+    final Set<String> synonyms = getSynonyms(owlClass, ont, preferredTerm, synonymProps, 
+        labelsToExclude);
     
     if (preferredTerm == null && synonyms.isEmpty()) {
       String label = iriDisplayMap.get(iri);

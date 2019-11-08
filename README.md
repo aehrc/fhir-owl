@@ -1,19 +1,109 @@
 # OWL to FHIR Transformer
 
-This standalone application transforms an OWL ontology into one or more FHIR CodeSystem resources. 
+This Spring Boot CLI application transforms an OWL ontology into FHIR terminology resources.
 
-The following are some of the challenges in this transformation:
+## Building from source
 
-1. OWL ontologies have an import mechanism that can be used to include content from other ontologies and thus allow reusability. FHIR does not support a similar mechanism, but codes in a code system can declare a parent property that references an external code system.
+You will need Maven installed in your computer. You can build the jar file using Maven.
 
-2. Classes defined in an OWL ontology do not necessarily need to used the Ontology IRI as prefix, as is the case with the OBO ontologies. For example, the IRI for HPO is http://purl.obolibrary.org/obo/hp.owl and a sample class is http://purl.obolibrary.org/obo/HP\_0000005.
+```
+mvn package
+```
 
-3. Importing of the ontologies that contain external classes is not enforced and this has two consequences:
-    * It complicates determining the defining ontology for the class. For example, RO\_IMPORT defines the class PATO\_0001241 without importing the PATO ontology.
-    * Impedes the creation of some of the required code systems. For example, HSAPDV declares the UBERON class UBERON_0000105, but the UBERON ontololgy is not imported.
+## Configuration
 
-4. Some OWL ontologies import a smaller version of other ontologies, for performance reasons. These derived ontologies are, however, not the defining ontologies of the imported classes and therefore the original defining ontology should be resolved and used to create the corresponding FHIR code system.
+### Properties
 
-5. Some imports are not versioned, which makes creating the corresponding code systems difficult.
+The following properties define some of the default values that are used. These can be overriden via arguments to the VM, e.g., ``-Dontoserver.owl.defaults.publisher=http://purl.org/dc/elements/1.1/publisher``
 
-All of these examples are based on HPO version 2017\-06\-21 (and it's imports).
+__ontoserver.owl.defaults.publisher__ (http://purl.org/dc/elements/1.1/publisher)
+
+The default annotation property where the publisher of the ontology can be found.
+
+__ontoserver.owl.defaults.description__ (http://purl.org/dc/elements/1.1/subject,http://www.w3.org/2000/01/rdf-schema#comment)
+
+The default annotation property where the description of the ontology can be found.
+
+__ontoserver.owl.defaults.preferredTerm__ (http://www.w3.org/2000/01/rdf-schema#label)
+
+The default annotation property where the preferred term of OWL classes can be found.
+
+__ontoserver.owl.defaults.synonym__ (http://www.w3.org/2000/01/rdf-schema#label)
+
+The default annotation property where the synonyms of the OWL classes can be found.
+
+### IRI mappings
+
+The application also looks for a file named __iri_mappings.txt__ in the classpath and uses it to load OWL ontologies that are available in the file system. This is useful to reduce the loading time of some ontologies that import large external ontologies, such as HPO. By default, the OWL API library will try to resolve any imported ontology using its IRI, which results in the ontology being downloaded from the web. The iri_mappings.txt file defines mappings between IRIs and local files, as shown here:
+
+```
+http://purl.obolibrary.org/obo/nbo.owl,/CSIRO/resources/ontologies/iri_maps/http___purl_obolibrary_org_obo_nbo_owl.owl
+```
+
+The location of the files is relative to the user's home folder.
+
+## Running
+
+You need a JVM to run the application. The only mandatory options are -i and -o.
+
+```
+java -jar fhir-owl-1.0.0.jar -i [input OWL file] -o [output FHIR JSON file]
+```
+
+The following options are available:
+
+| Parameter          | Type        | Description   |
+| :----------------- | :---------- |:------------- |
+| -c                 | string      | Indicates which annotation property contains the concepts' codes. If the value is not set, then the IRI of the class is used. If the class is imported then the full IRI is used. If the class is defined in the ontology then the short form is used. |
+| -codeReplace       | string      | Two strings separated by a comma. Replaces the first string with the second string in all local codes. |
+| -compositional     | boolean     | Flag to indicate if the code system defines a post-coordination grammar. |
+| -contact           | string      | Comma-separated list of contact details for the publisher. Each contact detail has the format [name|system|value], where system has the following possible values: *phone*, *fax*, *email*, *pager*, *url*, *sms* or *other*. |
+| -content           | string      | The extent of the content in this resource. Valid values are *not-present*, *example*, *fragment*, *complete* and *supplement*. Defaults to *complete*. The actual value does not affect the output of the transformation. |
+| -copyright         | string      | A copyright statement about the code system. |
+| -d                 | string      | Indicates which annotation property contains the concepts' displays. Default is RDFS:label. |
+| -date              | string      | The published date. Valid formats are: YYYY, YYYY-MM, YYYY-MM-DD and YYYY-MM-DDThh:mm:ss+zz:zz. |
+| -definition        | string      | Indicates which annotation property contains the concepts' definitions. |
+| -description       | string      | The description of the code system. This option takes precedence over -descriptionProp. |
+| -descriptionProp   | string      | Comma-separated list of OWL annotation properties that contain the code system description. |
+| -experimental      | boolean     | Indicates if the code system is for testing purposes or real usage. |
+| -help              | none        | Print the help message. |
+| -i                 | string      | The input OWL file. |
+| -id                | string      | The technical id of the code system. Required if using PUT to upload the resource to a FHIR server. |
+| -identifier        | string      | Comma-separated list of additional business identifiers. Each business identifer has the format [system]|[value]. |
+| -includeDeprecated | boolean     | Include all OWL classes, including deprecated ones. |
+| -labelsToExclude   | string      | Comma-separated list of class labels to exclude. |
+| -language          | string      | The language of the content. This is a code from the [FHIR Common Languages value set](https://www.hl7.org/fhir/valueset-languages.html). |
+| - mainNs           | string      | Comma-separated list of namespace prefixes that determine which classes are part of the main ontology. |
+| -n                 | string      | Used to specify the computer-friendly name of the code system. This option takes precedence over -nameProp. |
+| -nameProp          | string      | A property to look for the computer-friendly name of the code system in the OWL file. If this option is not specified or the specified property is not found, then the RDFS:label property is used by default. If no label can be found using the property then the ontology IRI is used. |
+| -o                 | string      | The output FHIR JSON file. |
+| -publisher         | string      | The publisher of the code system. This option takes precedence over -publisherProp. |
+| -publisherProp     | string      | Comma-separated list of OWL annotation properties that contain the code system publisher. |
+| -purpose           | string      | Explanation of why this code system is needed. |
+| -s                 | string      | Comma-separated list of annotation properties on OWL classes that contain the concepts' synonyms. |
+| -status            | string      | Code system status. Valid values are: *draft*, *active*, *retired* and *unknown*. |
+| -t                 | string      | A human-friendly name for the code system. |
+| -url               | string      | Canonical identifier of the code system. If this option is not specified then the ontology’s IRI will be used. If the ontology has no IRI then the transformation fails. |
+| -v                 | string      | Business version. If this option is not specified then the ontology’s version will be used. If the ontology has no version then the version is set to ‘NA’. |
+| -valueset          | string      | The value set that represents the entire code system. If this option is not specified then the value will be constructed from the URI of the code system. |
+| -versionNeeded     | boolean     | Flag to indicate if the code system commits to concept permanence across versions. |
+
+### Examples
+
+The Human Phenotype Ontology was transformed using the following command:
+
+```
+java -jar fhir-owl-1.0.0.jar -i hp_20181221.owl -o hp_20181221.json -id hpo -name "Human Phenotype Ontology" -content not-present -mainNs http://purl.obolibrary.org/obo/HP_ -descriptionProp http://purl.org/dc/elements/1.1/subject -status active -codeReplace _,:
+```
+
+You can browse the output [here](https://ontoserver.csiro.au/shrimp/?concept=http://www.w3.org/2002/07/owl%23Thing&system=http://purl.obolibrary.org/obo/hp.owl&versionId=http://purl.obolibrary.org/obo/hp/releases/2019-04-15&fhir=https://genomics.ontoserver.csiro.au/fhir).
+
+The Sequence Ontology was transformed using the following command:
+
+```
+java -jar fhir-owl-1.0.0.jar -i so-simple.owl -o so-simple.json -id so -name "Sequence Ontology" -status active -codeReplace "_,:" -s "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym" -mainNs "http://purl.obolibrary.org/obo/SO_" -labelsToExclude "wiki,WIKI"
+```
+
+You can browse the output [here](https://ontoserver.csiro.au/shrimp/?concept=Thing&system=http://purl.obolibrary.org/obo/so/so-simple.owl&versionId=http://purl.obolibrary.org/obo/so/so-xp.owl/so-simple.owl&fhir=https://genomics.ontoserver.csiro.au/fhir).
+
+

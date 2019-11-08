@@ -81,6 +81,9 @@ public class Application implements CommandLineRunner {
 
   }
   
+  /**
+   * Convenience method to avoid issues when the OWL API has to download external ontologies.
+   */
   private static void trustEverything() {
     // Create a trust manager that does not validate certificate chains
     TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
@@ -125,85 +128,119 @@ public class Application implements CommandLineRunner {
   public void run(String... args) throws Exception {
     Options options = new Options();
     
+    options.addOption("c", "code", true, "Indicates which annotation property contains the "
+        + "concepts' codes. If the value is not set, then the IRI of the class is used. If the "
+        + "class is imported then the full IRI is used. If the class is defined in the ontology "
+        + "then the short form is used.");
+    
+    options.addOption("codeReplace", true, "Two strings separated by a comma. Replaces the first"
+        + " string with the second string in all local codes.");
+    
+    options.addOption("compositional", false, "Flag to indicate that the code system defines a "
+        + "post-coordination grammar.");
+    
+    options.addOption("contact", true, "Comma-separated list of contact details for the "
+        + "publisher. Each contact detail has the format [name|system|value], where system has "
+        + "the following possible values: phone, fax, email, pager, url, sms or other.");
     options.addOption(new Option("help", "Print this message."));
+    
+    options.addOption("content", true, "he extent of the content in this resource. Valid values "
+        + "are not-present, example, fragment, complete and supplement. Defaults to complete. The "
+        + "actual value does not affect the output of the transformation.");
+    
+    options.addOption("copyright", true, "A copyright statement about the code system.");
+    
+    options.addOption("d", "display", true, "Indicates which annotation property contains the "
+        + "concepts' displays. Default is RDFS:label.");
+    
+    options.addOption("date", true, "The published date. Valid formats are: YYYY, YYYY-MM, "
+        + "YYYY-MM-DD and YYYY-MM-DDThh:mm:ss+zz:zz.");
+    
+    options.addOption("definition", true, "Indicates which annotation property contains the "
+        + "concepts' definitions.");
+    
+    options.addOption("description", true, "The description of the code system. This option takes "
+        + "precedence over -descriptionProp.");
+    
+    options.addOption("descriptionProp", true, "Comma-separated list of OWL annotation "
+        + "properties that contain the code system description.");
+    
+    options.addOption("experimental", false, "Indicates if the code system is for testing "
+        + "purposes or real usage.");
+    
     options.addOption(
         Option.builder("i")
         .required(true)
         .hasArg(true)
         .longOpt("input")
-        .desc("Specify the input OWL file.")
+        .desc("The input OWL file.")
         .build()
     );
+    
+    options.addOption("id", true, "The technical id of the code system. Required if using PUT to "
+        + "upload the resource to a FHIR server.");
+    
+    options.addOption("identifier", true, "Comma-separated list of additional business "
+        + "identifiers. Each business identifer has the format [system]|[value].");
+    
+    options.addOption("includeDeprecated", false, "Include all OWL classes, including deprecated "
+        + "ones.");
+    
+    options.addOption("labelsToExclude", true, "Comma-separated list of class labels to exclude.");
+    
+    options.addOption("language", true, "The language of the content. This is a code from the "
+        + "FHIR Common Languages value set.");
+    
+    options.addOption("mainNs", true, "Comma-separated list of namespace prefixes that determine "
+        + "which classes are part of the main ontology.");
+    
+    options.addOption("n", "name", true, "Used to specify the computer-friendly name of the code "
+        + "system. This option takes precedence over -nameProp.");
+    
+    options.addOption("nameProp", "nameProp", true, "A property to look for the computer-friendly "
+        + "name of the code system in the OWL file. If this option is not specified or the "
+        + "specified property is not found, then the RDFS:label property is used by default. If "
+        + "no label can be found using the property then the ontology IRI is used. ");
+    
     options.addOption(
         Option.builder("o")
         .required(true)
         .hasArg(true)
         .longOpt("output")
-        .desc("Specify the output JSON file.")
+        .desc("The output FHIR JSON file.")
         .build()
     );
-    options.addOption("includeDeprecated", false, "Include all classes, including deprecated "
-        + "ones.");
     
-    options.addOption("id", true, "The technical id of the code system.");
-    options.addOption("language", true, "The language of the content. This is a code supplied by "
-        + "the user from the FHIR Common Languages value set.");
-    options.addOption("url", true, "The code system url. If this option is not specified then the"
-        + " ontology's IRI will be used. If the ontology has no IRI then the transformation "
-        + "fails.");
-    options.addOption("identifier", true, "Comma-separated list of additional business "
-        + "identifiers. Each business identifer has the format [system]|[value].");
-    options.addOption("v", "version", true, "The code system version. If this option is not "
-        + "specified then the ontology's version will be used. If the ontology has no version then "
-        + "the version is set to 'NA'.");
-    options.addOption("n", "name", true, "The code system name. If this option is not " 
-        + "specified then the value will be taken from the OWL file based on the nameProp " 
-        + "option. Otherwise the ontology's IRI is used.");
-    options.addOption("nameProp", "nameProp", true, "OWL annotation property that contains the "
-        + "name of the code system.");
-    options.addOption("t", "title", true, "The code system title.");
-    options.addOption("status", true, "Code system status. Valid values are draft, active, "
-        + "retired and unknown");
-    options.addOption("experimental", false, "Indicates if the code system is for testing "
-        + "purposes, not real usage.");
-    options.addOption("date", true, "The published date. Valid formats are: YYYY, YYYY-MM, "
-        + "YYYY-MM-DD and YYYY-MM-DDThh:mm:ss+zz:zz.");
-    options.addOption("publisher", true, "The publisher of the code system. If this option is not "
-        + "specified then the value will be taken from the OWL file based on the publisherProp "
-        + "option.");
+    options.addOption("publisher", true, "The publisher of the code system. This option takes "
+        + "precedence over -publisherProp.");
+    
     options.addOption("publisherProp", true, "Comma-separated list of OWL annotation properties "
         + "that contain the code system publisher.");
-    options.addOption("contact", true, "Comma-separated list of contact details for the "
-        + "publisher. Each contact detail has the format [name|system|value], where system has "
-        + "the following possible values: phone, fax, email, pager, url, sms or other.");
-    options.addOption("description", true, "The description of the code system. If this option "
-        + "is not specified then the value will be taken from the OWL file based on the "
-        + "descriptionProp option.");
-    options.addOption("descriptionProp", true, "Comma-separated list of OWL annotation "
-        + "properties that contain the code system description.");
-    options.addOption("purpose", true, "Explanation of why this code system is needed.");
-    options.addOption("copyright", true, "A copyright statement about the code system.");
-    options.addOption("valueset", true, "The value set that represents the entire code system.");
-    options.addOption("compositional", false, "Flag to indicate that the code system defines a "
-        + "post-coordination grammar.");
-    options.addOption("noVersionNeeded", false, "Flag to indicate that the code system commits to "
-        + "concept permanence across versions.");
-    options.addOption("content", true, "The extent of the content in this resource. Defaults to "
-        + "complete but can be set to other values. The actual value does not affect the output "
-        + "of the transformation.");
     
-    options.addOption("c", "code", true, "OWL annotation property for each class that maps to a "
-        + "concept code.");
-    options.addOption("d", "display", true, "OWL annotation property for each class that maps to "
-        + "a display.");
-    options.addOption("definition", true, "OWL annotation property for each class that maps to "
-        + "a defintion.");
-    options.addOption("s", "synonyms", true, "Comma-separated list of OWL annotation properties "
-        + "for each class that map to synonyms.");
-    options.addOption("mainNs", true, "Comma-separated list of namespaces that constitute the "
-        + "main ontology.");
-    options.addOption("codeReplace", true, "Two strings separated by a comma. Replaces the first"
-        + " string with the second string in all local codes.");
+    options.addOption("purpose", true, "Explanation of why this code system is needed.");
+    
+    options.addOption("s", "synonyms", true, "Comma-separated list of annotation properties on "
+        + "OWL classes that contain the concepts' synonyms.");
+    
+    options.addOption("status", true, "Code system status. Valid values are draft, active, "
+        + "retired and unknown");
+    
+    options.addOption("t", "title", true, "A human-friendly name for the code system.");
+    
+    options.addOption("url", true, "Canonical identifier of the code system. If this option is"
+        + " not specified then the ontology’s IRI will be used. If the ontology has no IRI then "
+        + "the transformation fails.");
+    
+    options.addOption("v", "version", true, "Business version. If this option is not specified "
+        + "then the ontology’s version will be used. If the ontology has no version then the "
+        + "version is set to ‘NA’.");
+    
+    options.addOption("valueset", true, "The value set that represents the entire code system. If "
+        + "this option is not specified then the value will be constructed from the URI of the "
+        + "code system.");
+    
+    options.addOption("versionNeeded", false, "Flag to indicate if the code system commits "
+        + "to concept permanence across versions.");
     
     CommandLineParser parser = new DefaultParser();
     try {
@@ -269,6 +306,11 @@ public class Application implements CommandLineRunner {
       res.setReplacementStringInCodes(parts[1]);
     }
     
+    val = line.getOptionValue("labelsToExclude");
+    if (val != null) {
+      res.setLabelsToExclude(val);
+    }
+    
     return res;
   }
   
@@ -279,7 +321,7 @@ public class Application implements CommandLineRunner {
     res.setIncludeDeprecated(line.hasOption("includeDeprecated"));
     res.setExperimental(line.hasOption("experimental"));
     res.setCompositional(line.hasOption("compositional"));
-    res.setVersionNeeded(!line.hasOption("noVersionNeeded"));
+    res.setVersionNeeded(line.hasOption("versionNeeded"));
     
     String val = line.getOptionValue("id");
     if (val != null) {
