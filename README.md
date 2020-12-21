@@ -93,7 +93,7 @@ The following options are available:
 The Human Phenotype Ontology was transformed using the following command:
 
 ```
-java -jar fhir-owl-1.0.0.jar -i hp_20181221.owl -o hp_20181221.json -id hpo -name "Human Phenotype Ontology" -content not-present -mainNs http://purl.obolibrary.org/obo/HP_ -descriptionProp http://purl.org/dc/elements/1.1/subject -status active -codeReplace _,:
+java -jar fhir-owl-1.0.0.jar -i hp_20181221.owl -o hp_20181221.json -id hpo -name "Human_Phenotype_Ontology_20181221" -t "Human Phenotype Ontology 20181221" -content complete -mainNs http://purl.obolibrary.org/obo/HP_ -descriptionProp http://purl.org/dc/elements/1.1/subject -status active -codeReplace _,:
 ```
 
 You can browse the output [here](https://ontoserver.csiro.au/shrimp/?concept=http://www.w3.org/2002/07/owl%23Thing&system=http://purl.obolibrary.org/obo/hp.owl&versionId=http://purl.obolibrary.org/obo/hp/releases/2019-04-15&fhir=https://genomics.ontoserver.csiro.au/fhir).
