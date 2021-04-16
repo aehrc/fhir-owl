@@ -19,7 +19,6 @@ import java.util.HashSet;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
@@ -43,12 +42,12 @@ public class Application implements CommandLineRunner {
   
   @Autowired
   private FhirOwlService fhirOwlService;
-  
+
   /**
    * Created here as a bean because it is expensive to create and we only need one instance that can
    * be shared.
    *
-   * @return
+   * @return The FHIR context.
    */
   @Bean
   public FhirContext fhirContext() {
@@ -58,7 +57,7 @@ public class Application implements CommandLineRunner {
   /**
    * Returns a GSON bean, with a custom serialiser for {@link Bundle}s.
    * 
-   * @return
+   * @return A bean that contains the GSON instance.
    */
   @Bean
   public Gson gson() {
@@ -103,11 +102,7 @@ public class Application implements CommandLineRunner {
       HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
 
       // Create all-trusting host name verifier
-      HostnameVerifier allHostsValid = new HostnameVerifier() {
-        public boolean verify(String hostname, SSLSession session) {
-          return true;
-        }
-      };
+      HostnameVerifier allHostsValid = (hostname, session) -> true;
 
       // Install the all-trusting host verifier
       HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
@@ -125,7 +120,7 @@ public class Application implements CommandLineRunner {
   }
 
   @Override
-  public void run(String... args) throws Exception {
+  public void run(String... args) {
     Options options = new Options();
     
     options.addOption("c", "code", true, "Indicates which annotation property contains the "
@@ -252,7 +247,7 @@ public class Application implements CommandLineRunner {
       
       try {
         if (line.hasOption("mainNs")) {
-          fhirOwlService.transform(csp, cp, new HashSet<String>(
+          fhirOwlService.transform(csp, cp, new HashSet<>(
               Arrays.asList(line.getOptionValue("mainNs").split("[,]"))));
         } else {
           fhirOwlService.transform(csp, cp);

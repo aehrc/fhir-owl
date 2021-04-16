@@ -1,3 +1,12 @@
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.iml
+
 src/site/markdown/api-swagger.md
 src/site/resources/swagger.json
 target/
