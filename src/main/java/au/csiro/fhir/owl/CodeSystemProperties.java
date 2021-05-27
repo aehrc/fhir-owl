@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright CSIRO Australian e-Health Research Centre (http://aehrc.com). All rights reserved. Use is subject to 
  * license terms and conditions.
  */
@@ -8,12 +8,7 @@ package au.csiro.fhir.owl;
 import java.io.File;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import org.hl7.fhir.r4.model.ContactDetail;
 import org.hl7.fhir.r4.model.Identifier;
@@ -35,45 +30,44 @@ public class CodeSystemProperties extends OwlProperties {
   private String id = null;
   private String language = null;
   private String url = null;
-  private List<Identifier> identifiers = new ArrayList<>();
+  private final List<Identifier> identifiers = new ArrayList<>();
   private String version = null;
   private String name = null;
   private String nameProp = null;
   private String title = null;
   private String status = "draft";
   private boolean experimental = false;
-  private Calendar date = null;
+  private final Calendar date = null;
   private String publisher = null;
-  private List<String> publisherProps = new ArrayList<>();
-  private List<ContactDetail> contacts = new ArrayList<>();
+  private final List<String> publisherProps = new ArrayList<>();
+  private final List<ContactDetail> contacts = new ArrayList<>();
   private String description = null;
-  private List<String> descriptionProps = new ArrayList<>();
+  private final List<String> descriptionProps = new ArrayList<>();
   private String purpose = null;
   private String copyright = null;
   private String valueSet = null;
   private boolean compositional = false;
   private boolean versionNeeded = false;
   private String content = "complete";
+  private String reasoner = "elk";
+  private boolean useFhirExtension = false;
+  private String dateRegex = null;
+
+  private final Set<String> reasonerValues = new HashSet<>(Arrays.asList("elk", "jfact"));
 
   private final Set<String> contentValues = new HashSet<>(Arrays.asList(
-      new String[] { "not-present", "example", "fragment", "complete", "supplement" })
+    "not-present", "example", "fragment", "complete", "supplement")
   );
   
-  private final Set<String> statusValues = new HashSet<>(Arrays.asList(
-      new String[] { "draft", "active", "retired", "unknown" })
-  );
+  private final Set<String> statusValues = new HashSet<>(Arrays.asList("draft", "active", "retired", "unknown"));
   
   private final Set<String> contactSystemValues = new HashSet<>(Arrays.asList(
-      new String[] { "phone", "fax", "email", "pager", "url", "sms", "other" })
+    "phone", "fax", "email", "pager", "url", "sms", "other")
   );
+
+  private final List<String> defaultPublisherProps = Collections.singletonList(DC_PUBLISHER);
   
-  private final String defaultNameProp = RDFS_LABEL;
-  
-  private final List<String> defaultPublisherProps = Arrays.asList(
-      new String[] { DC_PUBLISHER });
-  
-  private final List<String> defaultDescriptionProps = Arrays.asList(
-      new String[] { DC_SUBJECT, RDFS_COMMENT });
+  private final List<String> defaultDescriptionProps = Arrays.asList(DC_SUBJECT, RDFS_COMMENT);
 
   /**
    * Parses the arguments of the identifiers parameter.
@@ -201,6 +195,15 @@ public class CodeSystemProperties extends OwlProperties {
       }
     }
   }
+
+  /**
+   * Returns the content property.
+   *
+   * @return the content
+   */
+  public String getContent() {
+    return content;
+  }
   
   /**
    * Sets and validates the <i>content</i> property.
@@ -214,6 +217,29 @@ public class CodeSystemProperties extends OwlProperties {
           + "'. Valid values are: " + contentValues);
     }
     this.content = content;
+  }
+
+  /**
+   * Returns the reasoner property.
+   *
+   * @return the reasoner
+   */
+  public String getReasoner() {
+    return reasoner;
+  }
+
+  /**
+   * Sets and validates the <i>reasoner</i> property.
+   *
+   * @param reasoner The reasoner property.
+   * @throws InvalidPropertyException If the string is not a valid content.
+   */
+  public void setReasoner(String reasoner) {
+    if (!reasonerValues.contains(reasoner)) {
+      throw new InvalidPropertyException("Invalid content value '" + reasoner
+        + "'. Valid values are: " + reasonerValues);
+    }
+    this.reasoner = reasoner;
   }
   
   /**
@@ -541,18 +567,9 @@ public class CodeSystemProperties extends OwlProperties {
   }
 
   /**
-   * Returns the content property.
-   * 
-   * @return the content
-   */
-  public String getContent() {
-    return content;
-  }
-
-  /**
    * Returns the OWL annotation properties where the publisher of the code system can be found.
    * 
-   *  @param factory
+   *  @param factory The OWL data factory.
    * 
    * @return the publisherProps
    */
@@ -574,7 +591,7 @@ public class CodeSystemProperties extends OwlProperties {
   /**
    * Returns the OWL annotation properties where the description of the code system can be found.
    * 
-   * @param factory
+   * @param factory The OWL data factory.
    * 
    * @return the descriptionProps
    */
@@ -618,7 +635,7 @@ public class CodeSystemProperties extends OwlProperties {
    * @return the nameProp
    */
   public OWLAnnotationProperty getNameProp(OWLDataFactory factory) {
-    return loadProp(factory, nameProp, defaultNameProp, null);
+    return loadProp(factory, nameProp, RDFS_LABEL, null);
   }
 
 
@@ -630,5 +647,40 @@ public class CodeSystemProperties extends OwlProperties {
   public void setNameProp(String nameProp) {
     this.nameProp = nameProp;
   }
-  
+
+  /**
+   * Returns the flag that indicates if the .owl extension in the IRI should be replaced with .fhir.
+   *
+   * @return the useFhirExtension
+   */
+  public boolean isUseFhirExtension() {
+    return useFhirExtension;
+  }
+
+  /**
+   * Sets the flag that indicates if the .owl extension in the IRI should be replaced with .fhir.
+   *
+   * @param useFhirExtension The flag.
+   */
+  public void setUseFhirExtension(boolean useFhirExtension) {
+    this.useFhirExtension = useFhirExtension;
+  }
+
+  /**
+   * Returns the regular expression used to extract the code system date.
+   *
+   * @return the date regex
+   */
+  public String getDateRegex() {
+    return dateRegex;
+  }
+
+  /**
+   * Sets the regular expression used to extract the code system date.
+   *
+   * @param dateRegex the dateRegex to set
+   */
+  public void setDateRegex(String dateRegex) {
+    this.dateRegex = dateRegex;
+  }
 }
