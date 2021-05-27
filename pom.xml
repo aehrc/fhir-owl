@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>au.csiro</groupId>
-    <version>1.0.1</version>
+    <version>1.1.0</version>
     <artifactId>fhir-owl</artifactId>
     <name>FHIR OWL</name>
     <description>Transforms OWL ontologies into FHIR code systems.</description>
@@ -158,20 +158,6 @@
         <repository>
             <id>spring-releases</id>
             <url>https://repo.spring.io/libs-release</url>
-        </repository>
-        <repository>
-            <id>snapshots-repo</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-            <releases><enabled>false</enabled></releases>
-            <snapshots><enabled>true</enabled></snapshots>
-        </repository>
-        <repository>
-            <id>aehrc-repository</id>
-            <name>AeHRC Public</name>
-            <url>https://aehrc.com/maven2</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
         </repository>
     </repositories>
     <pluginRepositories>
