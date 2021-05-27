@@ -437,7 +437,7 @@ public class Application implements CommandLineRunner {
       res.setReasoner(val);
     }
 
-    res.setVersionNeeded(line.hasOption("useFhirExtension"));
+    res.setUseFhirExtension(line.hasOption("useFhirExtension"));
 
     val = line.getOptionValue("dateRegex");
     if (val != null) {
