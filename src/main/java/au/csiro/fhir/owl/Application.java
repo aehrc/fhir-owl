@@ -236,8 +236,27 @@ public class Application implements CommandLineRunner {
     
     options.addOption("versionNeeded", false, "Flag to indicate if the code system commits "
         + "to concept permanence across versions.");
+
+    options.addOption(
+      Option.builder("r")
+        .required(false)
+        .hasArg(true)
+        .longOpt("reasoner")
+        .desc("The reasoner to use. Valid values are 'elk' and 'jfact'. Default is 'elk'.")
+        .build()
+    );
+
+    options.addOption("useFhirExtension", false, "Flag to indicate if the last part of an IRI " +
+      "ending in `.owl` should be replaced with `.fhir`.");
+
+    options.addOption("dateRegex", true, "A regular expression used to extract the date of the " +
+      "code system from the configured attribute in the ontology. It should have the following three named groups: " +
+      "year, month and day. The three groups will be concatenated to form a version of the form `YYYYMMDD`. This is " +
+      "useful if the ontology version is a URI that contains a date but only the date wants to be used as the " +
+      "version of the code system.");
     
     CommandLineParser parser = new DefaultParser();
+
     try {
       // parse the command line arguments
       CommandLine line = parser.parse(options, args);
@@ -411,6 +430,18 @@ public class Application implements CommandLineRunner {
     val = line.getOptionValue("content");
     if (val != null) {
       res.setContent(val);
+    }
+
+    val = line.getOptionValue("reasoner");
+    if (val != null) {
+      res.setReasoner(val);
+    }
+
+    res.setVersionNeeded(line.hasOption("useFhirExtension"));
+
+    val = line.getOptionValue("dateRegex");
+    if (val != null) {
+      res.setDateRegex(val);
     }
     
     return res;

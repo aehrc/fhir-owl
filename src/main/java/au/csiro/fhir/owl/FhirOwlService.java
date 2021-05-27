@@ -4,6 +4,7 @@
  */
 package au.csiro.fhir.owl;
 
+import au.csiro.fhir.owl.util.GraphUtils;
 import ca.uhn.fhir.context.FhirContext;
 
 import com.google.common.base.Optional;
@@ -15,18 +16,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 import javax.annotation.PostConstruct;
@@ -48,12 +41,10 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.ContactDetail;
 import org.hl7.fhir.r4.model.Enumerations.PublicationStatus;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
-import org.semanticweb.elk.reasoner.Reasoner;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.model.parameters.Imports;
-import org.semanticweb.owlapi.reasoner.InferenceType;
-import org.semanticweb.owlapi.reasoner.NodeSet;
+import org.semanticweb.owlapi.reasoner.Node;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
 import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
 import org.semanticweb.owlapi.search.EntitySearcher;
@@ -180,7 +171,7 @@ public class FhirOwlService {
         }
       }
     }
-    return res.toArray(new String[res.size()]);
+    return res.toArray(new String[0]);
   }
   
   private void addIriMappings(OWLOntologyManager manager) {
@@ -198,7 +189,7 @@ public class FhirOwlService {
   }
   
   private CodeSystem createCodeSystem(CodeSystemProperties csp, ConceptProperties cp, 
-      Set<String> mainNamespaces) 
+      Set<String> mainNamespaces)
       throws OWLOntologyCreationException {
     
     final File input = csp.getInput();
@@ -216,20 +207,7 @@ public class FhirOwlService {
     // main ontology. If the main namespaces are provided then those are used. Otherwise
     // we need to calculate which concepts are defined in the main file and are not
     // defined in the imported ontologies
-    final Set<IRI> irisInMain = new HashSet<>();
-    if (mainNamespaces == null || mainNamespaces.isEmpty()) {
-      // Get concepts in main ontology
-      irisInMain.addAll(getIris(rootOnt.getClassesInSignature(Imports.EXCLUDED)));
-      
-      // Get all concepts in imported ontologies
-      final Set<IRI> importedIris = new HashSet<>();
-      for (OWLOntology io : rootOnt.getImports()) {
-        importedIris.addAll(getIris(io.getClassesInSignature(Imports.INCLUDED)));
-      }
-      
-      // Remove concepts in imported ontologies from the ones in the main ontology
-      irisInMain.removeAll(importedIris);
-    }
+    final Set<IRI> irisInMain = calculateIrisInMain(mainNamespaces, rootOnt);
     
     // Extract labels for all classes
     final Map<IRI, String> iriDisplayMap = new HashMap<>();
@@ -264,18 +242,43 @@ public class FhirOwlService {
     }
     
     // Classify root ontology
-    log.info("Classifying ontology " + getOntologyName(csp, rootOnt, factory));
-    OWLReasonerFactory reasonerFactory = new JFactFactory();
-    // OWLReasonerFactory reasonerFactory = new ElkReasonerFactory();
+    OWLReasonerFactory reasonerFactory;
+    String reasonerName = csp.getReasoner();
+    if (reasonerName.equals("elk")) {
+      reasonerFactory = new ElkReasonerFactory();
+    } else if (reasonerName.equals("jfact")) {
+      reasonerFactory = new JFactFactory();
+    } else {
+      throw new RuntimeException("Invalid reasoner " + reasonerName);
+    }
+
+    log.info("Classifying ontology " + getOntologyName(csp, rootOnt, factory) + " with " + reasonerName);
     OWLReasoner reasoner = reasonerFactory.createReasoner(rootOnt);
-    reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY, InferenceType.OBJECT_PROPERTY_HIERARCHY,
-        InferenceType.DATA_PROPERTY_HIERARCHY);
+    reasoner.precomputeInferences();
 
     // Create code system
     return createCodeSystem(rootOnt, manager.getOWLDataFactory(), reasoner, mainNamespaces, 
         irisInMain, iriDisplayMap, csp, cp);
   }
-  
+
+  Set<IRI> calculateIrisInMain(Set<String> mainNamespaces, OWLOntology rootOnt) {
+    final Set<IRI> irisInMain = new HashSet<>();
+    if (mainNamespaces == null || mainNamespaces.isEmpty()) {
+      // Get concepts in main ontology
+      irisInMain.addAll(getIris(rootOnt.getClassesInSignature(Imports.EXCLUDED)));
+
+      // Get all concepts in imported ontologies
+      final Set<IRI> importedIris = new HashSet<>();
+      for (OWLOntology io : rootOnt.getImports()) {
+        importedIris.addAll(getIris(io.getClassesInSignature(Imports.INCLUDED)));
+      }
+
+      // Remove concepts in imported ontologies from the ones in the main ontology
+      irisInMain.removeAll(importedIris);
+    }
+    return irisInMain;
+  }
+
   /**
    * Creates a code system from an ontology.
    * 
@@ -292,7 +295,7 @@ public class FhirOwlService {
    * 
    * @return The code system.
    */
-  private CodeSystem createCodeSystem(
+  CodeSystem createCodeSystem(
       OWLOntology ont, 
       final OWLDataFactory factory, 
       OWLReasoner reasoner, 
@@ -327,7 +330,12 @@ public class FhirOwlService {
       cs.setUrl(url);
     } else {
       if (iri.isPresent()) {
-        cs.setUrl(iri.get().toString());
+        String iriString = iri.get().toString();
+        if (iriString.endsWith(".owl") && csp.isUseFhirExtension()) {
+          cs.setUrl(iriString.substring(0, iriString.length() - 3) + "fhir");
+        } else {
+          cs.setUrl(iriString);
+        }
       } else {
         throw new NoIdException();
       }
@@ -337,16 +345,36 @@ public class FhirOwlService {
     cs.setIdentifier(csp.getIdentifiers());
     
     // Version
-    final String version = csp.getVersion();
-    if (version != null) {
-      cs.setVersion(version);
-    } else {
+    String version = csp.getVersion();
+    if (version == null) {
       if (v.isPresent()) {
-        cs.setVersion(v.get().toString());
+        version = v.get().toString();
       } else {
-        cs.setVersion("NA");
+        version = "NA";
       }
     }
+    String dateRegex = csp.getDateRegex();
+    if (dateRegex != null) {
+      try {
+        final Matcher matcher = Pattern.compile(dateRegex).matcher(version);
+        if (matcher.find() && matcher.groupCount() == 3) {
+          StringBuilder sb = new StringBuilder();
+          try {
+            sb.append(matcher.group("year"));
+            sb.append(matcher.group("month"));
+            sb.append(matcher.group("day"));
+          } catch (IllegalArgumentException e) {
+            log.warn("Could not extract date using regex " + dateRegex + ": " + e.getLocalizedMessage());
+          }
+          version = sb.toString();
+        }
+      } catch (PatternSyntaxException e) {
+        log.warn("The date regex '" + dateRegex + "' is invalid.");
+      } catch (Exception e) {
+        log.warn("There was a problem with date regex '" + dateRegex + "': " + e.getLocalizedMessage());
+      }
+    }
+    cs.setVersion(version);
     
     // Name
     final String name = getOntologyName(csp, ont, factory);
@@ -417,11 +445,7 @@ public class FhirOwlService {
     
     // Value set
     final String valueset = csp.getValueSet();
-    if (valueset != null) {
-      cs.setValueSet(valueset);
-    } else {
-      cs.setValueSet(createVsUrl(cs.getUrl()));
-    }
+    cs.setValueSet(Objects.requireNonNullElseGet(valueset, () -> createVsUrl(cs.getUrl())));
     
     // Hierarchy meaning - always is-a for OWL ontologies
     cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
@@ -479,38 +503,72 @@ public class FhirOwlService {
     int count = 0;
 
     // Add classes
-    final Set<OWLClass> classes = ont.getClassesInSignature(Imports.INCLUDED);
+    Set<OWLClass> classes = ont.getClassesInSignature(Imports.INCLUDED);
     classes.add(factory.getOWLThing());
+    Node<OWLClass> nothing = reasoner.getEquivalentClasses(factory.getOWLNothing());
+
+    // Need to filter equivalents to OWLNothing
+    classes = classes.stream()
+      .filter(x -> {
+        return !nothing.contains(x);
+      })
+      .collect(Collectors.toSet());
+
+    /* Shouldn't need to calculate transitive reduction because the reasoner should take care of it. However, JFact
+     * doesn't seem to do this properly with object properties calculating for everything just in case.
+     */
+    Map<OWLClass, Set<OWLClass>> classParents = GraphUtils.transitiveReduction(
+      classes, c -> reasoner.getSuperClasses(c, false).getFlattened());
     
     for (OWLClass owlClass : classes) {
-      if (processEntity(owlClass, cs, ont, reasoner, mainNamespaces, irisInMain, iriDisplayMap,
+      if (processEntity(owlClass, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
           includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
-          stringToReplaceInCodes, replacementStringInCodes, labelsToExclude)) {
+          stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, classParents)) {
         count++;
       }
     }
 
-    // Add object properties
-    final Set<OWLObjectProperty> objectProps = ont.getObjectPropertiesInSignature(Imports.INCLUDED);
-    objectProps.add(factory.getOWLTopObjectProperty());
+    if (csp.getReasoner().equals("jfact")) {
+      // Add object properties
+      final Set<OWLObjectProperty> objectProps = ont.getObjectPropertiesInSignature(Imports.INCLUDED);
+      if (!objectProps.isEmpty()) {
+        objectProps.add(factory.getOWLTopObjectProperty());
 
-    for (OWLObjectProperty prop : objectProps) {
-      if (processEntity(prop, cs, ont, reasoner, mainNamespaces, irisInMain, iriDisplayMap,
-          includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
-          stringToReplaceInCodes, replacementStringInCodes, labelsToExclude)) {
-        count++;
+        Map<OWLObjectProperty, Set<OWLObjectProperty>> opParents =
+          GraphUtils.transitiveReduction(objectProps, p -> reasoner.getSuperObjectProperties(p, false).getFlattened()
+            .stream()
+            .filter(o -> !o.isAnonymous())
+            .map(OWLObjectPropertyExpression::asOWLObjectProperty)
+            .collect(Collectors.toSet()));
+
+        for (OWLObjectProperty prop : objectProps) {
+          if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
+            includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
+            stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, opParents)) {
+            count++;
+          }
+        }
       }
-    }
 
-    // Add data properties
-    final Set<OWLDataProperty> dataProps = ont.getDataPropertiesInSignature(Imports.INCLUDED);
-    dataProps.add(factory.getOWLTopDataProperty());
+      // Add data properties
+      final Set<OWLDataProperty> dataProps = ont.getDataPropertiesInSignature(Imports.INCLUDED);
+      if (!dataProps.isEmpty()) {
+        dataProps.add(factory.getOWLTopDataProperty());
 
-    for (OWLDataProperty prop : dataProps) {
-      if (processEntity(prop, cs, ont, reasoner, mainNamespaces, irisInMain, iriDisplayMap,
-          includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
-          stringToReplaceInCodes, replacementStringInCodes, labelsToExclude)) {
-        count++;
+        Map<OWLDataProperty, Set<OWLDataProperty>> dpParents =
+          GraphUtils.transitiveReduction(dataProps, p -> reasoner.getSuperDataProperties(p, false).getFlattened()
+            .stream()
+            .filter(o -> !o.isAnonymous())
+            .map(OWLDataPropertyExpression::asOWLDataProperty)
+            .collect(Collectors.toSet()));
+
+        for (OWLDataProperty prop : dataProps) {
+          if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
+            includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
+            stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, dpParents)) {
+            count++;
+          }
+        }
       }
     }
     
@@ -528,38 +586,22 @@ public class FhirOwlService {
     }
   }
 
-  private boolean addHierarchyFields(final OWLReasoner reasoner, OWLEntity owlEntity,
-      ConceptDefinitionComponent cdc, Set<String> mainNamespaces,
-      Set<IRI> irisInMain, boolean includeDeprecated, String stringToReplaceInCodes,
-      String replacementStringInCodes, boolean hasImports) {
-
+  private <T extends OWLEntity> boolean addHierarchyFields(OWLEntity owlEntity,
+                                                           Set<T> parents,
+                                                           OWLOntology rootOntology,
+                                                           ConceptDefinitionComponent cdc,
+                                                           Set<String> mainNamespaces,
+                                                           Set<IRI> irisInMain,
+                                                           boolean includeDeprecated,
+                                                           String stringToReplaceInCodes,
+                                                           String replacementStringInCodes,
+                                                           boolean hasImports) {
     if (owlEntity.isTopEntity()) {
       return true;
     }
 
-    // Add hierarchy-related fields
-    Set<? extends OWLEntity> parents;
-    if (owlEntity.isOWLClass()) {
-      parents = reasoner.getSuperClasses(owlEntity.asOWLClass(), true).getFlattened();
-    } else if (owlEntity.isOWLObjectProperty()) {
-
-      NodeSet<OWLObjectPropertyExpression> ns = reasoner.getSuperObjectProperties(owlEntity.asOWLObjectProperty(), true);
-
-      parents = reasoner.getSuperObjectProperties(owlEntity.asOWLObjectProperty(), true)
-          .getFlattened()
-          .stream()
-          .filter(e -> !e.isAnonymous())
-          .map(OWLObjectPropertyExpression::asOWLObjectProperty)
-          .collect(Collectors.toSet());
-    } else if (owlEntity.isOWLDataProperty()) {
-      parents = reasoner.getSuperDataProperties(owlEntity.asOWLDataProperty(), true)
-          .getFlattened()
-          .stream()
-          .filter(e -> !e.isAnonymous())
-          .map(OWLDataPropertyExpression::asOWLDataProperty)
-          .collect(Collectors.toSet());
-    } else {
-      throw new RuntimeException("Unexpected OWL entity: " + owlEntity);
+    if (parents == null) {
+      throw new RuntimeException("Got null parents. This should not happen!");
     }
     
     log.debug("Found " + parents.size() + " parents for concept " + owlEntity.getIRI());
@@ -571,7 +613,7 @@ public class FhirOwlService {
       // If excluding deprecated class then also exclude from parents. In some ontologies
       // deprecated classes are still in the hierarchy, e.g. MONDO.
       if (!includeDeprecated) {
-        if (isDeprecated(parent, reasoner.getRootOntology())) {
+        if (isDeprecated(parent, rootOntology)) {
           continue;
         }
       }
@@ -746,21 +788,22 @@ public class FhirOwlService {
     }
   }
   
-  private boolean processEntity(OWLEntity owlEntity,
-      CodeSystem cs, 
-      OWLOntology ont, 
-      OWLReasoner reasoner, 
-      Set<String> mainNamespaces, 
-      Set<IRI> irisInMain, 
-      Map<IRI, String> iriDisplayMap, 
-      boolean includeDeprecated, 
-      OWLAnnotationProperty codeProp,
-      OWLAnnotationProperty preferredTermProp, 
-      List<OWLAnnotationProperty> synonymProps,
-      boolean hasImports,
-      String stringToReplaceInCodes,
-      String replacementStringInCodes,
-      List<String> labelsToExclude) {
+  private <T extends OWLEntity> boolean processEntity(
+    OWLEntity owlEntity,
+    CodeSystem cs,
+    OWLOntology ont,
+    Set<String> mainNamespaces,
+    Set<IRI> irisInMain,
+    Map<IRI, String> iriDisplayMap,
+    boolean includeDeprecated,
+    OWLAnnotationProperty codeProp,
+    OWLAnnotationProperty preferredTermProp,
+    List<OWLAnnotationProperty> synonymProps,
+    boolean hasImports,
+    String stringToReplaceInCodes,
+    String replacementStringInCodes,
+    List<String> labelsToExclude,
+    Map<T, Set<T>> parents) {
 
     if (owlEntity.isBottomEntity()) {
       return false;
@@ -808,7 +851,8 @@ public class FhirOwlService {
     // can be declared with an arbitrary namespace.
     importedProp.setValue(new BooleanType(imported));
 
-    boolean isRoot = addHierarchyFields(reasoner, owlEntity, cdc, mainNamespaces, irisInMain,
+
+    boolean isRoot = addHierarchyFields(owlEntity, parents.get(owlEntity), ont, cdc, mainNamespaces, irisInMain,
         includeDeprecated, stringToReplaceInCodes, replacementStringInCodes, hasImports);
 
     ConceptPropertyComponent prop = cdc.addProperty();
@@ -855,5 +899,8 @@ public class FhirOwlService {
               "Synonym (core metadata concept)"));
     }
   }
-  
+
+  public void setCtx(FhirContext ctx) {
+    this.ctx = ctx;
+  }
 }

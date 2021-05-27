@@ -87,6 +87,9 @@ The following options are available:
 | -v                 | string      | Business version. If this option is not specified then the ontology’s version will be used. If the ontology has no version then the version is set to ‘NA’. |
 | -valueset          | string      | The value set that represents the entire code system. If this option is not specified then the value will be constructed from the URI of the code system. |
 | -versionNeeded     | boolean     | Flag to indicate if the code system commits to concept permanence across versions. |
+| -r                 | string      | The reasoner to use. Valid values are: *elk* and *jfact*. Default value is *elk*.  |
+| -useFhirExtension  | boolean     | Flag to indicate if the last part of an IRI ending in `.owl` should be replaced with `.fhir`. |
+| -dateRegex         | string      | A regular expression used to extract the date of the code system from the configured attribute in the ontology. It should have the following three named groups: year, month and day. The three groups will be concatenated to form a version of the form `YYYYMMDD`. This is useful if the ontology version is a URI that contains a date but only the date wants to be used as the version of the code system. |
 
 ### Examples
 
