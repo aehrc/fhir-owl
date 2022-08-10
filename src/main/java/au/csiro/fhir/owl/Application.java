@@ -56,7 +56,7 @@ public class Application implements CommandLineRunner {
   
   /**
    * Returns a GSON bean, with a custom serialiser for {@link Bundle}s.
-   * 
+   *
    * @return A bean that contains the GSON instance.
    */
   @Bean
@@ -68,7 +68,7 @@ public class Application implements CommandLineRunner {
   
   /**
    * Main method.
-   * 
+   *
    * @param args Arguments.
    */
   public static void main(String[] args) {
@@ -162,6 +162,10 @@ public class Application implements CommandLineRunner {
     
     options.addOption("experimental", false, "Indicates if the code system is for testing "
         + "purposes or real usage.");
+    
+    options.addOption("heirarchyMeaning", true, "The meaning of the hierarchy of concepts as "
+        + "represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  "
+        + "Default is *is-a*.");
     
     options.addOption(
         Option.builder("i")
@@ -272,7 +276,7 @@ public class Application implements CommandLineRunner {
           fhirOwlService.transform(csp, cp);
         }
       } catch (Throwable t) {
-        System.out.println("There was a problem transforming the OWL file into FHIR: " 
+        System.out.println("There was a problem transforming the OWL file into FHIR: "
             + t.getLocalizedMessage());
         t.printStackTrace();
       }
@@ -415,6 +419,11 @@ public class Application implements CommandLineRunner {
     val = line.getOptionValue("purpose");
     if (val != null) {
       res.setPurpose(val);
+    }
+    
+    val = line.getOptionValue("heirarchyMeaning");
+    if (val != null) {
+      res.setHeirarchyMeaning(val);
     }
     
     val = line.getOptionValue("copyright");

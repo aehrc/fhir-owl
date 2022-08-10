@@ -446,9 +446,14 @@ public class FhirOwlService {
     // Value set
     final String valueset = csp.getValueSet();
     cs.setValueSet(Objects.requireNonNullElseGet(valueset, () -> createVsUrl(cs.getUrl())));
-    
-    // Hierarchy meaning - always is-a for OWL ontologies
-    cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
+  
+    // HeirarchyMeaning
+    final String heirarchyMeaning = csp.getHeirarchyMeaning();
+    if (heirarchyMeaning != null) {
+      cs.setHierarchyMeaning(CodeSystem.CodeSystemHierarchyMeaning.fromCode(heirarchyMeaning));
+    } else {
+      cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
+    }
     
     // Compositional
     cs.setCompositional(csp.isCompositional());

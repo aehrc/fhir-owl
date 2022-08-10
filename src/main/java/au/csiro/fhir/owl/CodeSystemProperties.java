@@ -44,6 +44,7 @@ public class CodeSystemProperties extends OwlProperties {
   private String description = null;
   private final List<String> descriptionProps = new ArrayList<>();
   private String purpose = null;
+  private String heirarchyMeaning = null;
   private String copyright = null;
   private String valueSet = null;
   private boolean compositional = false;
@@ -456,6 +457,24 @@ public class CodeSystemProperties extends OwlProperties {
    */
   public void setPurpose(String purpose) {
     this.purpose = purpose;
+  }
+  
+  /**
+   * Returns the heirarchyMeaning.
+   *
+   * @return the heirarchyMeaning
+   */
+  public String getHeirarchyMeaning() {
+    return heirarchyMeaning;
+  }
+  
+  /**
+   * Sets the heirarchyMeaning.
+   *
+   * @param heirarchyMeaning the heirarchyMeaning to set
+   */
+  public void setHeirarchyMeaning(String heirarchyMeaning) {
+    this.heirarchyMeaning = heirarchyMeaning;
   }
 
   /**

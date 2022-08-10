@@ -67,6 +67,7 @@ The following options are available:
 | -descriptionProp   | string      | Comma-separated list of OWL annotation properties that contain the code system description. |
 | -experimental      | boolean     | Indicates if the code system is for testing purposes or real usage. |
 | -help              | none        | Print the help message. |
+| -heirarchyMeaning  | string      | The meaning of the hierarchy of concepts as represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  Default is *is-a*. | 
 | -i                 | string      | The input OWL file. |
 | -id                | string      | The technical id of the code system. Required if using PUT to upload the resource to a FHIR server. |
 | -identifier        | string      | Comma-separated list of additional business identifiers. Each business identifer has the format [system]|[value]. |
