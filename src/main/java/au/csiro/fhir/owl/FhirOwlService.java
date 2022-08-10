@@ -876,7 +876,7 @@ public class FhirOwlService {
       String label = iriDisplayMap.get(iri);
       if (label != null) {
         cdc.setDisplay(label);
-      } else {
+      } else if(!cdc.hasDisplay()) {
         cdc.setDisplay(code);
       }
     } else if (preferredTerm == null) {
