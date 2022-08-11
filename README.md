@@ -72,6 +72,7 @@ The following options are available:
 | -id                | string      | The technical id of the code system. Required if using PUT to upload the resource to a FHIR server. |
 | -identifier        | string      | Comma-separated list of additional business identifiers. Each business identifer has the format [system]|[value]. |
 | -includeDeprecated | boolean     | Include all OWL classes, including deprecated ones. |
+| -jurisdiction      | string      | Comma-separated list of jurisdictions for the codesystem. Each jurisdiction must have the format [code\|system\|display], with values retrieved from the [FHIR Jurisdiction ValueSet](https://hl7.org/fhir/valueset-jurisdiction.html). |
 | -labelsToExclude   | string      | Comma-separated list of class labels to exclude. |
 | -language          | string      | The language of the content. This is a code from the [FHIR Common Languages value set](https://www.hl7.org/fhir/valueset-languages.html). |
 | - mainNs           | string      | Comma-separated list of namespace prefixes that determine which classes are part of the main ontology. |

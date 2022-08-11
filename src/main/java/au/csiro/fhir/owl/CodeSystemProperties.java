@@ -10,7 +10,10 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.ContactDetail;
+import org.hl7.fhir.r4.model.ContactPoint;
 import org.hl7.fhir.r4.model.Identifier;
 import org.semanticweb.owlapi.model.OWLAnnotationProperty;
 import org.semanticweb.owlapi.model.OWLDataFactory;
@@ -41,6 +44,7 @@ public class CodeSystemProperties extends OwlProperties {
   private String publisher = null;
   private final List<String> publisherProps = new ArrayList<>();
   private final List<ContactDetail> contacts = new ArrayList<>();
+  private final List<CodeableConcept> jurisdictions = new ArrayList<>();
   private String description = null;
   private final List<String> descriptionProps = new ArrayList<>();
   private String purpose = null;
@@ -196,7 +200,36 @@ public class CodeSystemProperties extends OwlProperties {
       }
     }
   }
-
+  
+  /**
+   * Parses the arguments of the jurisdiction parameter.
+   *
+   * @param jds The string that contains the jurisdiction information.
+   * @throws InvalidPropertyException If the string is not well formed.
+   */
+  public void setJurisdiction(String jds) {
+    for (String jd : jds.split("[,]")) {
+      String[] parts = jd.split("[|]");
+      if (parts.length != 3) {
+        throw new InvalidPropertyException("Invalid jurisdiction '" + jd
+                                               + "'. Valid format is [code|system|display] from https://hl7.org/fhir/valueset-jurisdiction.html.");
+      }
+      CodeableConcept jurisdiction = new CodeableConcept();
+      jurisdiction.addCoding(new Coding(parts[1], parts[0], parts[2]));
+      jurisdictions.add(jurisdiction);
+    }
+  }
+  
+  /**
+   * Returns the jurisdictions property.
+   *
+   * @return the jurisdictions
+   */
+  public List<CodeableConcept> getJurisdictions() {
+    return jurisdictions;
+  }
+  
+  
   /**
    * Returns the content property.
    *

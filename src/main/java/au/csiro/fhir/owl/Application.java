@@ -182,6 +182,10 @@ public class Application implements CommandLineRunner {
     options.addOption("identifier", true, "Comma-separated list of additional business "
         + "identifiers. Each business identifer has the format [system]|[value].");
     
+    options.addOption("jurisdiction", true, "Comma-separated list of jurisdictions for the codesystem. "
+        + "Each jurisdiction must have the format [code|system|display], with values retrieved from the "
+        + "[FHIR Jurisdiction ValueSet](https://hl7.org/fhir/valueset-jurisdiction.html)");
+    
     options.addOption("includeDeprecated", false, "Include all OWL classes, including deprecated "
         + "ones.");
     
@@ -414,6 +418,11 @@ public class Application implements CommandLineRunner {
     val = line.getOptionValue("descriptionProp");
     if (val != null) {
       res.setDescriptionProps(val);
+    }
+    
+    val = line.getOptionValue("jurisdiction");
+    if (val != null) {
+      res.setJurisdiction(val);
     }
 
     val = line.getOptionValue("purpose");

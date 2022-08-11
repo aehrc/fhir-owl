@@ -37,6 +37,7 @@ import org.hl7.fhir.r4.model.CodeSystem.FilterOperator;
 import org.hl7.fhir.r4.model.CodeSystem.PropertyComponent;
 import org.hl7.fhir.r4.model.CodeSystem.PropertyType;
 import org.hl7.fhir.r4.model.CodeType;
+import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.ContactDetail;
 import org.hl7.fhir.r4.model.Enumerations.PublicationStatus;
@@ -435,6 +436,12 @@ public class FhirOwlService {
     final String purpose = csp.getPurpose();
     if (purpose != null) {
       cs.setPurpose(purpose);
+    }
+  
+    // Jurisdictions
+    final List<CodeableConcept> jurisdictions = csp.getJurisdictions();
+    if (!jurisdictions.isEmpty()) {
+      cs.setJurisdiction(jurisdictions);
     }
     
     // Copyright
@@ -900,8 +907,6 @@ public class FhirOwlService {
       // This is a synonym - but we don't know the language
       ConceptDefinitionDesignationComponent cddc = cdc.addDesignation();
       cddc.setValue(syn);
-      cddc.setUse(new Coding("http://snomed.info/sct", "900000000000013009", 
-              "Synonym (core metadata concept)"));
     }
   }
 
