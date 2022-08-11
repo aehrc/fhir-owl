@@ -198,6 +198,14 @@ public class CodeSystemProperties extends OwlProperties {
         throw new InvalidPropertyException("Invalid system contact '" + parts[1] 
             + "'. Valid values are: " + contactSystemValues);
       }
+      
+      ContactDetail contactDetail = new ContactDetail();
+      contactDetail.setName(parts[0]);
+      ContactPoint contactPoint = new ContactPoint();
+      contactPoint.setSystem(ContactPoint.ContactPointSystem.fromCode(parts[1]));
+      contactPoint.setValue(parts[2]);
+      contactDetail.addTelecom(contactPoint);
+      contacts.add(contactDetail);
     }
   }
   
