@@ -907,6 +907,8 @@ public class FhirOwlService {
       // This is a synonym - but we don't know the language
       ConceptDefinitionDesignationComponent cddc = cdc.addDesignation();
       cddc.setValue(syn);
+      cddc.setUse(new Coding("http://snomed.info/sct", "900000000000013009", 
+              "Synonym (core metadata concept)"));
     }
   }
 
