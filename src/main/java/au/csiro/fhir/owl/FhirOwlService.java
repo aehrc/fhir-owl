@@ -26,8 +26,7 @@ import javax.annotation.PostConstruct;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.hl7.fhir.r4.model.BooleanType;
-import org.hl7.fhir.r4.model.CodeSystem;
+import org.hl7.fhir.r4.model.*;
 import org.hl7.fhir.r4.model.CodeSystem.CodeSystemContentMode;
 import org.hl7.fhir.r4.model.CodeSystem.CodeSystemHierarchyMeaning;
 import org.hl7.fhir.r4.model.CodeSystem.ConceptDefinitionComponent;
@@ -36,9 +35,6 @@ import org.hl7.fhir.r4.model.CodeSystem.ConceptPropertyComponent;
 import org.hl7.fhir.r4.model.CodeSystem.FilterOperator;
 import org.hl7.fhir.r4.model.CodeSystem.PropertyComponent;
 import org.hl7.fhir.r4.model.CodeSystem.PropertyType;
-import org.hl7.fhir.r4.model.CodeType;
-import org.hl7.fhir.r4.model.Coding;
-import org.hl7.fhir.r4.model.ContactDetail;
 import org.hl7.fhir.r4.model.Enumerations.PublicationStatus;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
@@ -495,6 +491,8 @@ public class FhirOwlService {
     final boolean includeDeprecated = csp.isIncludeDeprecated();
     final OWLAnnotationProperty codeProp = cp.getCode(factory);
     final OWLAnnotationProperty preferredTermProp = cp.getDisplay(factory);
+    final OWLAnnotationProperty definitionProp = cp.getDefinitionAnnotationProp(factory);
+    final OWLAnnotationProperty commentProp = cp.getCommentAnnotationProp(factory);
     final List<OWLAnnotationProperty> synonymProps = cp.getDesignations(factory);
     final String stringToReplaceInCodes = cp.getStringToReplaceInCodes();
     final String replacementStringInCodes = cp.getReplacementStringInCodes();
@@ -522,7 +520,7 @@ public class FhirOwlService {
     
     for (OWLClass owlClass : classes) {
       if (processEntity(owlClass, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
-          includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
+          includeDeprecated, codeProp, preferredTermProp, definitionProp, commentProp, synonymProps, hasImports,
           stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, classParents)) {
         count++;
       }
@@ -543,7 +541,7 @@ public class FhirOwlService {
 
         for (OWLObjectProperty prop : objectProps) {
           if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
-            includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
+            includeDeprecated, codeProp, preferredTermProp, definitionProp, commentProp, synonymProps, hasImports,
             stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, opParents)) {
             count++;
           }
@@ -564,7 +562,7 @@ public class FhirOwlService {
 
         for (OWLDataProperty prop : dataProps) {
           if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
-            includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
+            includeDeprecated, codeProp, preferredTermProp, definitionProp, commentProp, synonymProps, hasImports,
             stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, dpParents)) {
             count++;
           }
@@ -690,7 +688,29 @@ public class FhirOwlService {
     
     return null;
   }
-  
+
+  private String getDefinition(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
+    for (OWLAnnotation a : EntitySearcher.getAnnotations(owlEntity, ont, prop)) {
+      OWLAnnotationValue val = a.getValue();
+      if (val instanceof OWLLiteral) {
+        return ((OWLLiteral) val).getLiteral();
+      }
+    }
+
+    return null;
+  }
+
+  private String getComment(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
+    for (OWLAnnotation a : EntitySearcher.getAnnotations(owlEntity, ont, prop)) {
+      OWLAnnotationValue val = a.getValue();
+      if (val instanceof OWLLiteral) {
+        return ((OWLLiteral) val).getLiteral();
+      }
+    }
+
+    return null;
+  }
+
   private String getPreferedTerm(OWLEntity owlEntity, OWLOntology ont,
       OWLAnnotationProperty preferredTermAnnotationProperty, List<String> labelsToExclude) {
     
@@ -798,6 +818,8 @@ public class FhirOwlService {
     boolean includeDeprecated,
     OWLAnnotationProperty codeProp,
     OWLAnnotationProperty preferredTermProp,
+    OWLAnnotationProperty definitionProp,
+    OWLAnnotationProperty commentProp,
     List<OWLAnnotationProperty> synonymProps,
     boolean hasImports,
     String stringToReplaceInCodes,
@@ -885,7 +907,23 @@ public class FhirOwlService {
       cdc.setDisplay(preferredTerm);
       addSynonyms(synonyms, cdc);
     }
-    
+
+    String definition = getDefinition(owlEntity, ont, definitionProp);
+
+    if (definition != null) {
+      ConceptPropertyComponent newDefinitionAsPropertyProp = cdc.addProperty();
+      newDefinitionAsPropertyProp.setCode("definition");
+      newDefinitionAsPropertyProp.setValue(new StringType(definition));
+    }
+
+    String comment = getComment(owlEntity, ont, commentProp);
+
+    if (comment != null) {
+      ConceptPropertyComponent newCommentAsPropertyProp = cdc.addProperty();
+      newCommentAsPropertyProp.setCode("comment");
+      newCommentAsPropertyProp.setValue(new StringType(comment));
+    }
+
     cs.addConcept(cdc);
     return true;
   }

@@ -301,9 +301,14 @@ public class Application implements CommandLineRunner {
     
     val = line.getOptionValue("definition");
     if (val != null) {
-      res.setDefinition(val);
+      res.setDefinitionAnnotationProp(val);
     }
-    
+
+    val = line.getOptionValue("comment");
+    if (val != null) {
+      res.setCommentAnnotationProp(val);
+    }
+
     val = line.getOptionValue('s');
     if (val != null) {
       res.setDesignations(val);

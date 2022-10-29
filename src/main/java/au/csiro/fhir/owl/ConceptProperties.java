@@ -24,6 +24,7 @@ public class ConceptProperties extends OwlProperties {
   private String code = null;
   private String display = null;
   private String definition = null;
+  private String comment = null;
   private List<String> designations = new ArrayList<>();
   private String stringToReplaceInCodes = null;
   private String replacementStringInCodes = null;
@@ -75,11 +76,11 @@ public class ConceptProperties extends OwlProperties {
   /**
    * Returns the annotation property that contains the concept's definition.
    * 
-   * @param factory
+   * @param factory the factory for OWL concepts
    * 
    * @return the definition
    */
-  public OWLAnnotationProperty getDefinition(OWLDataFactory factory) {
+  public OWLAnnotationProperty getDefinitionAnnotationProp(OWLDataFactory factory) {
     return loadProp(factory, definition, null, null);
   }
   
@@ -88,8 +89,28 @@ public class ConceptProperties extends OwlProperties {
    * 
    * @param definition the definition to set
    */
-  public void setDefinition(String definition) {
+  public void setDefinitionAnnotationProp(String definition) {
     this.definition = definition;
+  }
+
+  /**
+   * Returns the annotation property that contains any comment about the concept.
+   *
+   * @param factory the factory for OWL concepts
+   *
+   * @return the comment
+   */
+  public OWLAnnotationProperty getCommentAnnotationProp(OWLDataFactory factory) {
+    return loadProp(factory, comment, null, null);
+  }
+
+  /**
+   * Sets the annotation property that contains a comment about the concept.
+   *
+   * @param comment the comment to set
+   */
+  public void setCommentAnnotationProp(String comment) {
+    this.comment = comment;
   }
 
   /**
