@@ -478,7 +478,7 @@ public class FhirOwlService {
     depProp.setCode("deprecated");
     depProp.setType(PropertyType.BOOLEAN);
     depProp.setDescription("Indicates if this concept is deprecated.");
-    
+
     // This property indicates if a concept is meant to represent a root, i.e. it's child of Thing.
     cs.addFilter().setCode("root").addOperator(FilterOperator.EQUAL).setValue("True or false.");
     cs.addFilter().setCode("deprecated").addOperator(FilterOperator.EQUAL)
@@ -497,7 +497,15 @@ public class FhirOwlService {
     final String stringToReplaceInCodes = cp.getStringToReplaceInCodes();
     final String replacementStringInCodes = cp.getReplacementStringInCodes();
     final List<String> labelsToExclude = cp.getLabelsToExclude();
-    
+
+    // if a comment annotation property is defined, then we need to add it is a possible FHIR code system property
+    if (commentProp != null) {
+      PropertyComponent commentPropForCodeSystem = cs.addProperty();
+      commentPropForCodeSystem.setCode("comment");
+      commentPropForCodeSystem.setType(PropertyType.STRING);
+      commentPropForCodeSystem.setDescription("A comment on any aspect of the code.");
+    }
+
     int count = 0;
 
     // Add classes
@@ -678,7 +686,7 @@ public class FhirOwlService {
   }
   
   
-  private String getCode(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
+  private String getOntologyEntityPropertyValue(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
     for (OWLAnnotation a : EntitySearcher.getAnnotations(owlEntity, ont, prop)) {
       OWLAnnotationValue val = a.getValue();
       if (val instanceof OWLLiteral) {
@@ -686,28 +694,6 @@ public class FhirOwlService {
       }
     }
     
-    return null;
-  }
-
-  private String getDefinition(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
-    for (OWLAnnotation a : EntitySearcher.getAnnotations(owlEntity, ont, prop)) {
-      OWLAnnotationValue val = a.getValue();
-      if (val instanceof OWLLiteral) {
-        return ((OWLLiteral) val).getLiteral();
-      }
-    }
-
-    return null;
-  }
-
-  private String getComment(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
-    for (OWLAnnotation a : EntitySearcher.getAnnotations(owlEntity, ont, prop)) {
-      OWLAnnotationValue val = a.getValue();
-      if (val instanceof OWLLiteral) {
-        return ((OWLLiteral) val).getLiteral();
-      }
-    }
-
     return null;
   }
 
@@ -844,7 +830,7 @@ public class FhirOwlService {
     // The code might come from an annotation property
     String code = null;
     if (codeProp != null) {
-      code = getCode(owlEntity, ont, codeProp);
+      code = getOntologyEntityPropertyValue(owlEntity, ont, codeProp);
     } 
     if (code == null) {
       code = imported ? iri.toString() : iri.getShortForm();
@@ -908,15 +894,13 @@ public class FhirOwlService {
       addSynonyms(synonyms, cdc);
     }
 
-    String definition = getDefinition(owlEntity, ont, definitionProp);
+    String definition = getOntologyEntityPropertyValue(owlEntity, ont, definitionProp);
 
     if (definition != null) {
-      ConceptPropertyComponent newDefinitionAsPropertyProp = cdc.addProperty();
-      newDefinitionAsPropertyProp.setCode("definition");
-      newDefinitionAsPropertyProp.setValue(new StringType(definition));
+      cdc.setDefinition(definition);
     }
 
-    String comment = getComment(owlEntity, ont, commentProp);
+    String comment = getOntologyEntityPropertyValue(owlEntity, ont, commentProp);
 
     if (comment != null) {
       ConceptPropertyComponent newCommentAsPropertyProp = cdc.addProperty();
