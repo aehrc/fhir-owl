@@ -292,7 +292,6 @@ public class Application implements CommandLineRunner {
   private ConceptProperties loadConceptProperties(CommandLine line) {
     ConceptProperties res = new ConceptProperties();
 
-    System.out.println("HELLLLO");
     String val = line.getOptionValue('c');
     if (val != null) {
       res.setCode(val);
@@ -310,7 +309,6 @@ public class Application implements CommandLineRunner {
 
     val = line.getOptionValue("comment");
     if (val != null) {
-      System.out.println("COMMMMMMEEENT " + val);
       res.setCommentAnnotationProp(val);
     }
 
