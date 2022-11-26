@@ -503,7 +503,7 @@ public class FhirOwlService {
       PropertyComponent commentPropForCodeSystem = cs.addProperty();
       commentPropForCodeSystem.setCode("comment");
       commentPropForCodeSystem.setType(PropertyType.STRING);
-      commentPropForCodeSystem.setDescription("A comment on any aspect of the code.");
+      commentPropForCodeSystem.setDescription("A comment on any aspect of the concept.");
     }
 
     int count = 0;
@@ -894,18 +894,22 @@ public class FhirOwlService {
       addSynonyms(synonyms, cdc);
     }
 
-    String definition = getOntologyEntityPropertyValue(owlEntity, ont, definitionProp);
+    if (definitionProp != null) {
+      String definition = getOntologyEntityPropertyValue(owlEntity, ont, definitionProp);
 
-    if (definition != null) {
-      cdc.setDefinition(definition);
+      if (definition != null) {
+        cdc.setDefinition(definition);
+      }
     }
 
-    String comment = getOntologyEntityPropertyValue(owlEntity, ont, commentProp);
+    if (commentProp != null) {
+      String comment = getOntologyEntityPropertyValue(owlEntity, ont, commentProp);
 
-    if (comment != null) {
-      ConceptPropertyComponent newCommentAsPropertyProp = cdc.addProperty();
-      newCommentAsPropertyProp.setCode("comment");
-      newCommentAsPropertyProp.setValue(new StringType(comment));
+      if (comment != null) {
+        ConceptPropertyComponent newCommentAsPropertyProp = cdc.addProperty();
+        newCommentAsPropertyProp.setCode("comment");
+        newCommentAsPropertyProp.setValue(new StringType(comment));
+      }
     }
 
     cs.addConcept(cdc);
