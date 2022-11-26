@@ -130,7 +130,10 @@ public class Application implements CommandLineRunner {
     
     options.addOption("codeReplace", true, "Two strings separated by a comma. Replaces the first"
         + " string with the second string in all local codes.");
-    
+
+    options.addOption("comment", true, "Indicates which annotation property contains the "
+            + "concepts' comment.");
+
     options.addOption("compositional", false, "Flag to indicate that the code system defines a "
         + "post-coordination grammar.");
     
@@ -288,7 +291,8 @@ public class Application implements CommandLineRunner {
   
   private ConceptProperties loadConceptProperties(CommandLine line) {
     ConceptProperties res = new ConceptProperties();
-    
+
+    System.out.println("HELLLLO");
     String val = line.getOptionValue('c');
     if (val != null) {
       res.setCode(val);
@@ -306,6 +310,7 @@ public class Application implements CommandLineRunner {
 
     val = line.getOptionValue("comment");
     if (val != null) {
+      System.out.println("COMMMMMMEEENT " + val);
       res.setCommentAnnotationProp(val);
     }
 
