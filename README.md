@@ -92,6 +92,8 @@ The following options are available:
 | -r                 | string      | The reasoner to use. Valid values are: *elk* and *jfact*. Default value is *elk*.  |
 | -useFhirExtension  | boolean     | Flag to indicate if the last part of an IRI ending in `.owl` should be replaced with `.fhir`. |
 | -dateRegex         | string      | A regular expression used to extract the date of the code system from the configured attribute in the ontology. It should have the following three named groups: year, month and day. The three groups will be concatenated to form a version of the form `YYYYMMDD`. This is useful if the ontology version is a URI that contains a date but only the date wants to be used as the version of the code system. |
+| -extractDataProps  | boolean     | Flag to indicate if DataProperties defined in the source ontology should be added as CodeSystem properties and CodeSystem Concept properties. |
+| -extractObjectProps| boolean     | Flag to indicate if ObjectProperties defined in the source ontology should be added as CodeSystem properties and CodeSystem Concept properties. An attempt has been made to represent both simple and complex OWL Object Properties, but because of the variability of how OWL Object Properties are expressed in different Ontologies, there may be need for enhancements in the future. |
 
 ### Examples
 
