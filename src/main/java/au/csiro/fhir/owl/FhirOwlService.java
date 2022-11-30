@@ -88,6 +88,8 @@ public class FhirOwlService {
   @Autowired
   private FhirContext ctx;
   
+  private final ObjectPropertyProcessor objectPropertyProcessor = new ObjectPropertyProcessor();
+  
   private final Map<IRI, IRI> iriMap = new HashMap<>();
   
   @PostConstruct
@@ -501,8 +503,16 @@ public class FhirOwlService {
     depProp.setCode("deprecated");
     depProp.setType(PropertyType.BOOLEAN);
     depProp.setDescription("Indicates if this concept is deprecated.");
-    
-    addDataPropertyComponents(ont, cs);
+   
+    final boolean extractDataProps = csp.isExtractDataProps();
+    final boolean extractObjectProps = csp.isExtractObjectProps();
+   
+    if (extractDataProps) {
+      addDataPropertyComponents(ont, cs);
+    }
+    if (extractObjectProps) {
+      objectPropertyProcessor.extractCodeSystemProperties(ont).forEach(cs::addProperty);
+    }
     
     // This property indicates if a concept is meant to represent a root, i.e. it's child of Thing.
     cs.addFilter().setCode("root").addOperator(FilterOperator.EQUAL).setValue("True or false.");
@@ -544,7 +554,8 @@ public class FhirOwlService {
     for (OWLClass owlClass : classes) {
       if (processEntity(owlClass, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
                         includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
-                        stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, classParents)) {
+                        stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, classParents, 
+                        extractDataProps, extractObjectProps)) {
         count++;
       }
     }
@@ -565,7 +576,8 @@ public class FhirOwlService {
         for (OWLObjectProperty prop : objectProps) {
           if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
                             includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
-                            stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, opParents)) {
+                            stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, opParents,
+                            extractDataProps, extractObjectProps)) {
             count++;
           }
         }
@@ -586,7 +598,8 @@ public class FhirOwlService {
         for (OWLDataProperty prop : dataProps) {
           if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
                             includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
-                            stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, dpParents)) {
+                            stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, dpParents,
+                            extractDataProps, extractObjectProps)) {
             count++;
           }
         }
@@ -826,7 +839,9 @@ public class FhirOwlService {
       String stringToReplaceInCodes,
       String replacementStringInCodes,
       List<String> labelsToExclude,
-      Map<T, Set<T>> parents) {
+      Map<T, Set<T>> parents, 
+      boolean extractDataProps, 
+      boolean extractObjectProps) {
     
     if (owlEntity.isBottomEntity()) {
       return false;
@@ -908,8 +923,12 @@ public class FhirOwlService {
       cdc.setDisplay(preferredTerm);
       addSynonyms(synonyms, cdc);
     }
-    addDataPropertyValues(owlEntity, ont, cdc);
-    
+    if (extractDataProps) {
+      addDataPropertyValues(owlEntity, ont, cdc);
+    }
+    if (extractObjectProps) {
+      objectPropertyProcessor.extractFhirCodeProperties(owlEntity, ont).forEach(cdc::addProperty);
+    }
     cs.addConcept(cdc);
     return true;
   }

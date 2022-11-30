@@ -57,7 +57,10 @@ public class CodeSystemProperties extends OwlProperties {
   private String reasoner = "elk";
   private boolean useFhirExtension = false;
   private String dateRegex = null;
-
+  private boolean extractDataProps = false;
+  private boolean extractObjectProps = false;
+  
+  
   private final Set<String> reasonerValues = new HashSet<>(Arrays.asList("elk", "jfact"));
 
   private final Set<String> contentValues = new HashSet<>(Arrays.asList(
@@ -73,7 +76,7 @@ public class CodeSystemProperties extends OwlProperties {
   private final List<String> defaultPublisherProps = Collections.singletonList(DC_PUBLISHER);
   
   private final List<String> defaultDescriptionProps = Arrays.asList(DC_SUBJECT, RDFS_COMMENT);
-
+  
   /**
    * Parses the arguments of the identifiers parameter.
    * 
@@ -742,5 +745,47 @@ public class CodeSystemProperties extends OwlProperties {
    */
   public void setDateRegex(String dateRegex) {
     this.dateRegex = dateRegex;
+  }
+  
+  /**
+   * Returns the flag that indicates if the DataProperties should be extracted from the source ontology as CodeSystem properties 
+   * and CodeSystem Concept properties
+   *
+   * @return the extractDataProps flag value
+   */
+  public boolean isExtractDataProps() {
+    return extractDataProps;
+  }
+  
+  
+  /**
+   * Sets the flag that indicates if the DataProperties should be extracted from the source ontology as CodeSystem properties 
+   * and CodeSystem Concept properties.
+   *
+   * @param extractDataProps The flag.
+   */
+  public void setExtractDataProps(boolean extractDataProps) {
+    this.extractDataProps = extractDataProps;
+  }
+  
+  /**
+   * Returns the flag that indicates if the ObjectProperties should be extracted from the source ontology as CodeSystem properties 
+   * and CodeSystem Concept properties
+   *
+   * @return the extractObjectProps flag value
+   */
+  public boolean isExtractObjectProps() {
+    return extractObjectProps;
+  }
+  
+  
+  /**
+   * Sets the flag that indicates if the ObjectProperties should be extracted from the source ontology as CodeSystem properties 
+   * and CodeSystem Concept properties.
+   *
+   * @param extractObjectProps The flag.
+   */
+  public void setExtractObjectProps(boolean extractObjectProps) {
+    this.extractObjectProps = extractObjectProps;
   }
 }

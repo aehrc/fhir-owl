@@ -263,6 +263,14 @@ public class Application implements CommandLineRunner {
       "useful if the ontology version is a URI that contains a date but only the date wants to be used as the " +
       "version of the code system.");
     
+    options.addOption("extractDataProps", false, "Flag to indicate if DataProperties defined in" +
+        "the source ontology should be added as CodeSystem properties and CodeSystem Concept properties.");
+    
+    options.addOption("extractObjectProps", false, "Flag to indicate if ObjectProperties defined in" +
+        "the source ontology should be added as CodeSystem properties and CodeSystem Concept properties.  An attempt " +
+        "has been made to represent both simple and complex OWL Object Properties, but because of the variability of " +
+        "how OWL Object Properties are expressed in different Ontologies, there may be need for enhancements in the future.");
+    
     CommandLineParser parser = new DefaultParser();
 
     try {
@@ -461,7 +469,11 @@ public class Application implements CommandLineRunner {
     if (val != null) {
       res.setDateRegex(val);
     }
-    
+  
+    res.setExtractDataProps(line.hasOption("extractDataProps"));
+  
+    res.setExtractObjectProps(line.hasOption("extractObjectProps"));
+  
     return res;
   }
 
