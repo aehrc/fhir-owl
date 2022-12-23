@@ -22,6 +22,7 @@ import org.semanticweb.owlapi.model.OWLDataFactory;
 public class ConceptProperties extends OwlProperties {
   
   private String code = null;
+  private String inactive = null;
   private String display = null;
   private String definition = null;
   private List<String> designations = new ArrayList<>();
@@ -52,6 +53,14 @@ public class ConceptProperties extends OwlProperties {
     this.code = code;
   }
   
+  public void setInactive(String inactive) {
+    this.inactive = inactive;
+  }
+
+  public OWLAnnotationProperty getInactive(OWLDataFactory factory) {
+    return loadProp(factory, inactive, null, null);
+  }
+
   /**
    * Returns the annotation property that contains the concept's display.
    * 

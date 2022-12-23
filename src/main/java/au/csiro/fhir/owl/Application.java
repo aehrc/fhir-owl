@@ -181,14 +181,17 @@ public class Application implements CommandLineRunner {
     
     options.addOption("identifier", true, "Comma-separated list of additional business "
         + "identifiers. Each business identifer has the format [system]|[value].");
-    
+
+    options.addOption("inactive", "inactive", true, "Indicates which annotation property contains "
+        + "the concepts' inactive status.");
+
+    options.addOption("includeDeprecated", false, "Include all OWL classes, including deprecated "
+        + "ones.");
+
     options.addOption("jurisdiction", true, "Comma-separated list of jurisdictions for the codesystem. "
         + "Each jurisdiction must have the format [code|system|display], with values retrieved from the "
         + "[FHIR Jurisdiction ValueSet](https://hl7.org/fhir/valueset-jurisdiction.html)");
-    
-    options.addOption("includeDeprecated", false, "Include all OWL classes, including deprecated "
-        + "ones.");
-    
+
     options.addOption("labelsToExclude", true, "Comma-separated list of class labels to exclude.");
     
     options.addOption("language", true, "The language of the content. This is a code from the "
@@ -313,7 +316,7 @@ public class Application implements CommandLineRunner {
   
   private ConceptProperties loadConceptProperties(CommandLine line) {
     ConceptProperties res = new ConceptProperties();
-    
+
     String val = line.getOptionValue('c');
     if (val != null) {
       res.setCode(val);
@@ -348,6 +351,11 @@ public class Application implements CommandLineRunner {
     val = line.getOptionValue("labelsToExclude");
     if (val != null) {
       res.setLabelsToExclude(val);
+    }
+
+    val = line.getOptionValue("inactive");
+    if (val != null) {
+      res.setInactive(val);
     }
     
     return res;
@@ -482,7 +490,7 @@ public class Application implements CommandLineRunner {
     res.setExtractDataProps(line.hasOption("extractDataProps"));
   
     res.setExtractObjectProps(line.hasOption("extractObjectProps"));
-  
+
     return res;
   }
 
