@@ -525,6 +525,7 @@ public class FhirOwlService {
     
     final boolean includeDeprecated = csp.isIncludeDeprecated();
     final OWLAnnotationProperty codeProp = cp.getCode(factory);
+    final OWLAnnotationProperty inactiveProp = cp.getInactive(factory);
     final OWLAnnotationProperty preferredTermProp = cp.getDisplay(factory);
     final List<OWLAnnotationProperty> synonymProps = cp.getDesignations(factory);
     final String stringToReplaceInCodes = cp.getStringToReplaceInCodes();
@@ -555,7 +556,7 @@ public class FhirOwlService {
       if (processEntity(owlClass, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
                         includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
                         stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, classParents, 
-                        extractDataProps, extractObjectProps)) {
+                        extractDataProps, extractObjectProps,inactiveProp)) {
         count++;
       }
     }
@@ -577,7 +578,7 @@ public class FhirOwlService {
           if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
                             includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
                             stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, opParents,
-                            extractDataProps, extractObjectProps)) {
+                            extractDataProps, extractObjectProps,inactiveProp)) {
             count++;
           }
         }
@@ -599,7 +600,7 @@ public class FhirOwlService {
           if (processEntity(prop, cs, ont, mainNamespaces, irisInMain, iriDisplayMap,
                             includeDeprecated, codeProp, preferredTermProp, synonymProps, hasImports,
                             stringToReplaceInCodes, replacementStringInCodes, labelsToExclude, dpParents,
-                            extractDataProps, extractObjectProps)) {
+                            extractDataProps, extractObjectProps,inactiveProp)) {
             count++;
           }
         }
@@ -713,7 +714,42 @@ public class FhirOwlService {
     return null;
   }
   
-  
+  private boolean getInactive(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
+    boolean isInactive = false;
+    for (OWLAnnotation ann : EntitySearcher.getAnnotationObjects(owlEntity, ont,prop)) {
+        OWLAnnotationValue val = ann.getValue();
+        Optional<OWLLiteral> lit = val.asLiteral();
+        if (lit.isPresent()) {
+          final OWLLiteral l = lit.get();
+          if (l.isBoolean()) {
+            isInactive = l.parseBoolean();
+          } else {
+            log.warn("Found inactive attribute but it is not boolean: " + l.toString());
+          }
+        }
+    }
+    return isInactive;
+  }
+
+
+//  //TODO: maybe use something like this if we want to have inactive driven by a command line flag
+//  private String getInactive(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
+//    //Is this prop (that was passed in from command line as the "code" property)  an annotation,
+//    // and is it set for this Entity
+//
+//    //how would this ever return > 1 annotation?
+//    final Collection<OWLAnnotation> annotations = EntitySearcher.getAnnotations(owlEntity,ont,prop);
+//    for (OWLAnnotation a : annotations) {
+//      OWLAnnotationValue val = a.getValue();
+//      if (val instanceof OWLLiteral) {
+//        return ((OWLLiteral) val).getLiteral();
+//      }
+//    }
+//
+//    return null;
+//  }
+
+
   private String getCode(OWLEntity owlEntity, OWLOntology ont, OWLAnnotationProperty prop) {
     //Is this prop (that was passed in from command line as the "code" property)  an annotation,
     // and is it set for this Entity
@@ -841,7 +877,8 @@ public class FhirOwlService {
       List<String> labelsToExclude,
       Map<T, Set<T>> parents, 
       boolean extractDataProps, 
-      boolean extractObjectProps) {
+      boolean extractObjectProps,
+      OWLAnnotationProperty inactiveProp) {
     
     if (owlEntity.isBottomEntity()) {
       return false;
@@ -900,7 +937,16 @@ public class FhirOwlService {
     prop = cdc.addProperty();
     prop.setCode("deprecated");
     prop.setValue(new BooleanType(isDeprecated));
-    
+
+    if(inactiveProp != null){
+      final boolean isInactive = getInactive(owlEntity, ont,inactiveProp);
+      if(isInactive){
+        prop = cdc.addProperty();
+        prop.setCode("inactive");
+        prop.setValue(new BooleanType(isInactive));
+      }
+    }
+
     String preferredTerm = getPreferedTerm(owlEntity, ont, preferredTermProp, labelsToExclude);
     final Set<String> synonyms = getSynonyms(owlEntity, ont, preferredTerm, synonymProps,
                                              labelsToExclude);
