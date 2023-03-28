@@ -11,13 +11,10 @@ import static au.csiro.fhir.owl.util.ArgConstants.OUTPUT_FILE;
 import static au.csiro.fhir.owl.util.ArgConstants.OUTPUT_FLAG;
 import static au.csiro.fhir.owl.util.ArgConstants.TEST_FLAG;
 
-import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.parser.IParser;
-import java.io.File;
-import java.io.FileInputStream;
+import au.csiro.fhir.owl.util.OutputFileManager;
 import java.io.FileNotFoundException;
-import java.io.InputStream;
 import org.hl7.fhir.r4.model.CodeSystem;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -41,11 +38,7 @@ public class MetadataDefaultsTest {
   
   @BeforeAll
   private void parseCodeSystemFromFile() throws FileNotFoundException {
-    FhirContext ctx = FhirContext.forR4();
-    File initialFile = new File(OUTPUT_FILE);
-    InputStream inputStream = new FileInputStream(initialFile);
-    IParser parser = ctx.newJsonParser();
-    codeSystem = parser.parseResource(CodeSystem.class, inputStream);
+    codeSystem = OutputFileManager.getCodeSystemFromFile(OUTPUT_FILE);
   }
   
   @Test
@@ -54,4 +47,10 @@ public class MetadataDefaultsTest {
     Assertions.assertTrue(codeSystem.getJurisdiction().isEmpty());
     Assertions.assertFalse(codeSystem.hasContact());
   }
+  
+  @AfterAll
+  private void cleanup(){
+    OutputFileManager.deleteFileIfExists(OUTPUT_FILE);
+  }
+  
 }

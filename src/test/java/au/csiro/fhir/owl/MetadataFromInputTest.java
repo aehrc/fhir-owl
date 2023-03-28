@@ -27,16 +27,13 @@ import static au.csiro.fhir.owl.util.ArgConstants.TEST_FLAG;
 import static au.csiro.fhir.owl.util.ArgConstants.UNITED_STATES_OF_AMERICA;
 import static au.csiro.fhir.owl.util.ArgConstants.US;
 
-import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.parser.IParser;
-import java.io.File;
-import java.io.FileInputStream;
+import au.csiro.fhir.owl.util.OutputFileManager;
 import java.io.FileNotFoundException;
-import java.io.InputStream;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.CodeSystem;
 import org.hl7.fhir.r4.model.ContactDetail;
 import org.hl7.fhir.r4.model.ContactPoint;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -63,17 +60,13 @@ public class MetadataFromInputTest {
   
   @BeforeAll
   private void parseCodeSystemFromFile() throws FileNotFoundException {
-    FhirContext ctx = FhirContext.forR4();
-    File initialFile = new File(OUTPUT_FILE);
-    InputStream inputStream = new FileInputStream(initialFile);
-    IParser parser = ctx.newJsonParser();
-    codeSystem = parser.parseResource(CodeSystem.class, inputStream);
+    codeSystem = OutputFileManager.getCodeSystemFromFile(OUTPUT_FILE);
   }
   
   @Test
   public void testMetadateFromArgs() {
     Assertions.assertEquals(CodeSystem.CodeSystemHierarchyMeaning.GROUPEDBY, codeSystem.getHierarchyMeaning());
-    Assertions.assertTrue(codeSystem.getJurisdiction().size()==1);
+    Assertions.assertEquals(1, codeSystem.getJurisdiction().size());
     Assertions.assertEquals(US, codeSystem.getJurisdiction().get(0).getCodingFirstRep().getCode());
     Assertions.assertEquals(UNITED_STATES_OF_AMERICA, codeSystem.getJurisdiction().get(0).getCodingFirstRep().getDisplay());
     Assertions.assertEquals(JURISDICTION_URN, codeSystem.getJurisdiction().get(0).getCodingFirstRep().getSystem());
@@ -81,7 +74,7 @@ public class MetadataFromInputTest {
   
   @Test
   public void testContactsFromArgs() {
-    Assertions.assertTrue(codeSystem.getContact().size() == 2);
+    Assertions.assertEquals(2, codeSystem.getContact().size());
   
     ContactDetail contactDetail1 = codeSystem.getContact().stream()
         .filter(contactDetail -> contactDetail.getName().equals(EXAMPLE_NAME_1))
@@ -95,8 +88,13 @@ public class MetadataFromInputTest {
         .filter(contactDetail -> contactDetail.getName().equals(EXAMPLE_NAME_2))
         .collect(Collectors.toList())
         .get(0);
-    Assertions.assertEquals(EXAMPLE_NAME_2, contactDetail1.getName());
-    Assertions.assertEquals(ContactPoint.ContactPointSystem.fromCode(PHONE), contactDetail1.getTelecomFirstRep().getSystem());
-    Assertions.assertEquals(EXAMPLE_PHONE, contactDetail1.getTelecomFirstRep().getValue());
+    Assertions.assertEquals(EXAMPLE_NAME_2, contactDetail2.getName());
+    Assertions.assertEquals(ContactPoint.ContactPointSystem.fromCode(PHONE), contactDetail2.getTelecomFirstRep().getSystem());
+    Assertions.assertEquals(EXAMPLE_PHONE, contactDetail2.getTelecomFirstRep().getValue());
+  }
+  
+  @AfterAll
+  private void cleanup(){
+    OutputFileManager.deleteFileIfExists(OUTPUT_FILE);
   }
 }
