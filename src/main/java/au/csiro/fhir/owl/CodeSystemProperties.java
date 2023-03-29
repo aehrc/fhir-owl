@@ -48,6 +48,7 @@ public class CodeSystemProperties extends OwlProperties {
   private String description = null;
   private final List<String> descriptionProps = new ArrayList<>();
   private String purpose = null;
+  private List<String> filters = new ArrayList<>();
   private String heirarchyMeaning = null;
   private String copyright = null;
   private String valueSet = null;
@@ -501,6 +502,24 @@ public class CodeSystemProperties extends OwlProperties {
    */
   public void setPurpose(String purpose) {
     this.purpose = purpose;
+  }
+  
+  /**
+   * Returns the filters.
+   *
+   * @return the filters
+   */
+  public List<String> getFilters() {
+    return filters;
+  }
+  
+  /**
+   * Sets the filters.
+   *
+   * @param filters the filters to add
+   */
+  public void setFilters(String filters) {
+    this.filters = Arrays.asList(filters.split(","));
   }
   
   /**
