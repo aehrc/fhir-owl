@@ -5,28 +5,9 @@
 package au.csiro.fhir.owl;
 
 
-import static au.csiro.fhir.owl.util.ArgConstants.CONTACT_EXAMPLE_WITH_EMAIL;
-import static au.csiro.fhir.owl.util.ArgConstants.CONTACT_EXAMPLE_WITH_PHONE;
-import static au.csiro.fhir.owl.util.ArgConstants.CONTACT_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.EMAIL;
-import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_EMAIL;
-import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_NAME_1;
-import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_NAME_2;
-import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_PHONE;
-import static au.csiro.fhir.owl.util.ArgConstants.HEIRARCHY_MEANING_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.HEIRARCHY_MEANING_GROUPED_BY;
-import static au.csiro.fhir.owl.util.ArgConstants.INPUT_FILE;
-import static au.csiro.fhir.owl.util.ArgConstants.INPUT_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.JURISDICTION_EXAMPLE_US_ARG;
-import static au.csiro.fhir.owl.util.ArgConstants.JURISDICTION_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.JURISDICTION_URN;
-import static au.csiro.fhir.owl.util.ArgConstants.OUTPUT_FILE;
-import static au.csiro.fhir.owl.util.ArgConstants.OUTPUT_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.PHONE;
-import static au.csiro.fhir.owl.util.ArgConstants.TEST_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.UNITED_STATES_OF_AMERICA;
-import static au.csiro.fhir.owl.util.ArgConstants.US;
+import static au.csiro.fhir.owl.util.ArgConstants.*;
 
+import au.csiro.fhir.owl.util.FilterUtil;
 import au.csiro.fhir.owl.util.OutputFileManager;
 import java.io.FileNotFoundException;
 import java.util.stream.Collectors;
@@ -51,7 +32,10 @@ import org.springframework.boot.test.context.SpringBootTest;
     OUTPUT_FLAG, OUTPUT_FILE,
     HEIRARCHY_MEANING_FLAG, HEIRARCHY_MEANING_GROUPED_BY,
     JURISDICTION_FLAG, JURISDICTION_EXAMPLE_US_ARG,
-    CONTACT_FLAG, CONTACT_EXAMPLE_WITH_EMAIL+","+CONTACT_EXAMPLE_WITH_PHONE
+    CONTACT_FLAG, CONTACT_EXAMPLE_WITH_EMAIL+","+CONTACT_EXAMPLE_WITH_PHONE,
+    DATA_PROPERTY_FLAG,
+    OBJECT_PROPERTY_FLAG,
+    FILTER_FLAG, HAS_BASE+","+HAS_TOPPING
 })
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class MetadataFromInputTest {
@@ -91,6 +75,18 @@ public class MetadataFromInputTest {
     Assertions.assertEquals(EXAMPLE_NAME_2, contactDetail2.getName());
     Assertions.assertEquals(ContactPoint.ContactPointSystem.fromCode(PHONE), contactDetail2.getTelecomFirstRep().getSystem());
     Assertions.assertEquals(EXAMPLE_PHONE, contactDetail2.getTelecomFirstRep().getValue());
+  }
+  
+  @Test
+  public void testFilters() {
+    Assertions.assertEquals(6, codeSystem.getFilter().size());
+    
+    FilterUtil.codeSystemFilterExists(codeSystem, DEPRECATED);
+    FilterUtil.codeSystemFilterExists(codeSystem, IMPORTED);
+    FilterUtil.codeSystemFilterExists(codeSystem, ROOT);
+    FilterUtil.codeSystemFilterExists(codeSystem, PARENT);
+    FilterUtil.codeSystemFilterExists(codeSystem, HAS_BASE);
+    FilterUtil.codeSystemFilterExists(codeSystem, HAS_TOPPING);
   }
   
   @AfterAll

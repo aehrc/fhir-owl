@@ -519,6 +519,10 @@ public class FhirOwlService {
     cs.addFilter().setCode("deprecated").addOperator(FilterOperator.EQUAL)
         .setValue("True or false.");
     cs.addFilter().setCode("imported").addOperator(FilterOperator.EQUAL).setValue("True or false");
+    cs.addFilter().setCode("parent").addOperator(FilterOperator.EQUAL).setValue("string");
+    
+    // Add filters based on -filter, making sure that they correspond to a CodeSystem Property
+    csp.getFilters().forEach(filter -> addFilter(cs, filter));
     
     // Determine if there are imports
     final boolean hasImports = !ont.getImportsDeclarations().isEmpty();
@@ -610,6 +614,14 @@ public class FhirOwlService {
     cs.setCount(count);
     
     return cs;
+  }
+  
+  private void addFilter(CodeSystem cs, String filter) {
+    PropertyComponent propertyComponent = cs.getProperty(filter);
+    if(propertyComponent == null)
+      throw new InvalidPropertyException("Filter: " + filter + " could not be created because no CodeSystem property exists with value: " + filter);
+    
+    cs.addFilter().setCode(filter).addOperator(FilterOperator.EQUAL).setValue(propertyComponent.getType().toCode());
   }
   
   private String createVsUrl(String url) {

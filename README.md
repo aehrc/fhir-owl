@@ -66,6 +66,7 @@ The following options are available:
 | -description       | string      | The description of the code system. This option takes precedence over -descriptionProp. |
 | -descriptionProp   | string      | Comma-separated list of OWL annotation properties that contain the code system description. |
 | -experimental      | boolean     | Indicates if the code system is for testing purposes or real usage. |
+| -filter            | string      | Comma-separated list of properties to add a filter for.  The listed filters will only be added if they exist as a CodeSystem Property (see -extractDataProps and -extractObjectProps). Filter Operator will be "Equal" and the Filter value will be the type of the Property.  |
 | -help              | none        | Print the help message. |
 | -heirarchyMeaning  | string      | The meaning of the hierarchy of concepts as represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  Default is *is-a*. | 
 | -i                 | string      | The input OWL file. |
