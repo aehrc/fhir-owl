@@ -31,5 +31,16 @@ public class ArgConstants {
     public static final String UNITED_STATES_OF_AMERICA = "United States of America";
     public static final String JURISDICTION_EXAMPLE_US_ARG = JURISDICTION_URN+"|"+US+"|"+UNITED_STATES_OF_AMERICA;
     
+    public static final String FILTER_FLAG = "-filter";
+    public static final String ROOT = "root";
+    public static final String DEPRECATED = "deprecated";
+    public static final String IMPORTED = "imported";
+    public static final String PARENT = "parent";
+    public static final String HAS_BASE = "hasBase";
+    public static final String HAS_TOPPING = "hasTopping";
+    
+    
+    public static final String DATA_PROPERTY_FLAG = "-extractDataProps";
+    public static final String OBJECT_PROPERTY_FLAG = "-extractObjectProps";
     
 }

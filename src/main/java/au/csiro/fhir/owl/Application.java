@@ -162,6 +162,10 @@ public class Application implements CommandLineRunner {
     
     options.addOption("experimental", false, "Indicates if the code system is for testing "
         + "purposes or real usage.");
+  
+    options.addOption("filter", true, "Comma-separated list of properties to add a filter for.  " 
+        + "The listed filters will only be added if they exist as a CodeSystem Property (see -extractDataProps and " 
+        + "-extractObjectProps). Filter Operator will be \"Equal\" and the Filter value will be the type of the Property.");
     
     options.addOption("hierarchyMeaning", true, "The meaning of the hierarchy of concepts as "
         + "represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  "
@@ -453,6 +457,11 @@ public class Application implements CommandLineRunner {
     val = line.getOptionValue("purpose");
     if (val != null) {
       res.setPurpose(val);
+    }
+  
+    val = line.getOptionValue("filter");
+    if (val != null) {
+      res.setFilters(val);
     }
     
     val = line.getOptionValue("hierarchyMeaning");

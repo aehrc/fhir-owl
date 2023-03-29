@@ -5,12 +5,17 @@
 package au.csiro.fhir.owl;
 
 
+import static au.csiro.fhir.owl.util.ArgConstants.DEPRECATED;
+import static au.csiro.fhir.owl.util.ArgConstants.IMPORTED;
 import static au.csiro.fhir.owl.util.ArgConstants.INPUT_FILE;
 import static au.csiro.fhir.owl.util.ArgConstants.INPUT_FLAG;
 import static au.csiro.fhir.owl.util.ArgConstants.OUTPUT_FILE;
 import static au.csiro.fhir.owl.util.ArgConstants.OUTPUT_FLAG;
+import static au.csiro.fhir.owl.util.ArgConstants.PARENT;
+import static au.csiro.fhir.owl.util.ArgConstants.ROOT;
 import static au.csiro.fhir.owl.util.ArgConstants.TEST_FLAG;
 
+import au.csiro.fhir.owl.util.FilterUtil;
 import au.csiro.fhir.owl.util.OutputFileManager;
 import java.io.FileNotFoundException;
 import org.hl7.fhir.r4.model.CodeSystem;
@@ -46,6 +51,16 @@ public class MetadataDefaultsTest {
     Assertions.assertEquals(codeSystem.getHierarchyMeaning(), CodeSystem.CodeSystemHierarchyMeaning.ISA);
     Assertions.assertTrue(codeSystem.getJurisdiction().isEmpty());
     Assertions.assertFalse(codeSystem.hasContact());
+  }
+  
+  @Test
+  public void testDefaultFilters() {
+    Assertions.assertEquals(4, codeSystem.getFilter().size());
+    
+    FilterUtil.codeSystemFilterExists(codeSystem, DEPRECATED);
+    FilterUtil.codeSystemFilterExists(codeSystem, IMPORTED);
+    FilterUtil.codeSystemFilterExists(codeSystem, ROOT);
+    FilterUtil.codeSystemFilterExists(codeSystem, PARENT);
   }
   
   @AfterAll
