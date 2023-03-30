@@ -22,14 +22,14 @@ public class ArgConstants {
     public static final String CONTACT_EXAMPLE_WITH_EMAIL = EXAMPLE_NAME_1 +"|"+EMAIL+"|"+ EXAMPLE_EMAIL;
     public static final String CONTACT_EXAMPLE_WITH_PHONE = EXAMPLE_NAME_2 +"|"+PHONE+"|"+ EXAMPLE_PHONE;
     
-    public static final String HEIRARCHY_MEANING_FLAG = "-heirarchyMeaning";
-    public static final String HEIRARCHY_MEANING_GROUPED_BY = "grouped-by"; //Static value of CodeSystem.CodeSystemHierarchyMeaning.GROUPEDBY
+    public static final String HIERARCHY_MEANING_FLAG = "-hierarchyMeaning";
+    public static final String HIERARCHY_MEANING_GROUPED_BY = "grouped-by"; //Static value of CodeSystem.CodeSystemHierarchyMeaning.GROUPEDBY
     
     public static final String JURISDICTION_FLAG = "-jurisdiction";
-    public static final String US = "US";
     public static final String JURISDICTION_URN = "urn:iso:std:iso:3166";
+    public static final String US = "US";
     public static final String UNITED_STATES_OF_AMERICA = "United States of America";
-    public static final String JURISDICTION_EXAMPLE_US_ARG = US+"|"+ JURISDICTION_URN +"|"+UNITED_STATES_OF_AMERICA;
+    public static final String JURISDICTION_EXAMPLE_US_ARG = JURISDICTION_URN+"|"+US+"|"+UNITED_STATES_OF_AMERICA;
     
     
 }

@@ -454,10 +454,10 @@ public class FhirOwlService {
     final String valueset = csp.getValueSet();
     cs.setValueSet(Objects.requireNonNullElseGet(valueset, () -> createVsUrl(cs.getUrl())));
   
-    // HeirarchyMeaning
-    final String heirarchyMeaning = csp.getHeirarchyMeaning();
-    if (heirarchyMeaning != null) {
-      cs.setHierarchyMeaning(CodeSystem.CodeSystemHierarchyMeaning.fromCode(heirarchyMeaning));
+    // HierarchyMeaning
+    final String hierarchyMeaning = csp.getHierarchyMeaning();
+    if (hierarchyMeaning != null) {
+      cs.setHierarchyMeaning(CodeSystem.CodeSystemHierarchyMeaning.fromCode(hierarchyMeaning));
     } else {
       cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
     }

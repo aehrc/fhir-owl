@@ -13,8 +13,8 @@ import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_EMAIL;
 import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_NAME_1;
 import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_NAME_2;
 import static au.csiro.fhir.owl.util.ArgConstants.EXAMPLE_PHONE;
-import static au.csiro.fhir.owl.util.ArgConstants.HEIRARCHY_MEANING_FLAG;
-import static au.csiro.fhir.owl.util.ArgConstants.HEIRARCHY_MEANING_GROUPED_BY;
+import static au.csiro.fhir.owl.util.ArgConstants.HIERARCHY_MEANING_FLAG;
+import static au.csiro.fhir.owl.util.ArgConstants.HIERARCHY_MEANING_GROUPED_BY;
 import static au.csiro.fhir.owl.util.ArgConstants.INPUT_FILE;
 import static au.csiro.fhir.owl.util.ArgConstants.INPUT_FLAG;
 import static au.csiro.fhir.owl.util.ArgConstants.JURISDICTION_EXAMPLE_US_ARG;
@@ -49,7 +49,7 @@ import org.springframework.boot.test.context.SpringBootTest;
     TEST_FLAG,
     INPUT_FLAG, INPUT_FILE, 
     OUTPUT_FLAG, OUTPUT_FILE,
-    HEIRARCHY_MEANING_FLAG, HEIRARCHY_MEANING_GROUPED_BY,
+    HIERARCHY_MEANING_FLAG, HIERARCHY_MEANING_GROUPED_BY,
     JURISDICTION_FLAG, JURISDICTION_EXAMPLE_US_ARG,
     CONTACT_FLAG, CONTACT_EXAMPLE_WITH_EMAIL+","+CONTACT_EXAMPLE_WITH_PHONE
 })

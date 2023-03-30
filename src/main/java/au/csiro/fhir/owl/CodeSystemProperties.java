@@ -48,7 +48,7 @@ public class CodeSystemProperties extends OwlProperties {
   private String description = null;
   private final List<String> descriptionProps = new ArrayList<>();
   private String purpose = null;
-  private String heirarchyMeaning = null;
+  private String hierarchyMeaning = null;
   private String copyright = null;
   private String valueSet = null;
   private boolean compositional = false;
@@ -220,10 +220,10 @@ public class CodeSystemProperties extends OwlProperties {
       String[] parts = jd.split("[|]");
       if (parts.length != 3) {
         throw new InvalidPropertyException("Invalid jurisdiction '" + jd
-                                               + "'. Valid format is [code|system|display] from https://hl7.org/fhir/valueset-jurisdiction.html.");
+                                               + "'. Valid format is [system|code|display] from https://hl7.org/fhir/valueset-jurisdiction.html.");
       }
       CodeableConcept jurisdiction = new CodeableConcept();
-      jurisdiction.addCoding(new Coding(parts[1], parts[0], parts[2]));
+      jurisdiction.addCoding(new Coding(parts[0], parts[1], parts[2]));
       jurisdictions.add(jurisdiction);
     }
   }
@@ -501,21 +501,21 @@ public class CodeSystemProperties extends OwlProperties {
   }
   
   /**
-   * Returns the heirarchyMeaning.
+   * Returns the hierarchyMeaning.
    *
-   * @return the heirarchyMeaning
+   * @return the hierarchyMeaning
    */
-  public String getHeirarchyMeaning() {
-    return heirarchyMeaning;
+  public String getHierarchyMeaning() {
+    return hierarchyMeaning;
   }
   
   /**
-   * Sets the heirarchyMeaning.
+   * Sets the hierarchyMeaning.
    *
-   * @param heirarchyMeaning the heirarchyMeaning to set
+   * @param hierarchyMeaning the hierarchyMeaning to set
    */
-  public void setHeirarchyMeaning(String heirarchyMeaning) {
-    this.heirarchyMeaning = heirarchyMeaning;
+  public void setHierarchyMeaning(String hierarchyMeaning) {
+    this.hierarchyMeaning = hierarchyMeaning;
   }
 
   /**

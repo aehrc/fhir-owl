@@ -163,7 +163,7 @@ public class Application implements CommandLineRunner {
     options.addOption("experimental", false, "Indicates if the code system is for testing "
         + "purposes or real usage.");
     
-    options.addOption("heirarchyMeaning", true, "The meaning of the hierarchy of concepts as "
+    options.addOption("hierarchyMeaning", true, "The meaning of the hierarchy of concepts as "
         + "represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  "
         + "Default is *is-a*.");
     
@@ -439,9 +439,9 @@ public class Application implements CommandLineRunner {
       res.setPurpose(val);
     }
     
-    val = line.getOptionValue("heirarchyMeaning");
+    val = line.getOptionValue("hierarchyMeaning");
     if (val != null) {
-      res.setHeirarchyMeaning(val);
+      res.setHierarchyMeaning(val);
     }
     
     val = line.getOptionValue("copyright");
