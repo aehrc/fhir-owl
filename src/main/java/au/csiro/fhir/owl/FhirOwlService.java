@@ -37,6 +37,7 @@ import org.hl7.fhir.r4.model.CodeSystem.FilterOperator;
 import org.hl7.fhir.r4.model.CodeSystem.PropertyComponent;
 import org.hl7.fhir.r4.model.CodeSystem.PropertyType;
 import org.hl7.fhir.r4.model.CodeType;
+import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.ContactDetail;
 import org.hl7.fhir.r4.model.Enumerations.PublicationStatus;
@@ -436,6 +437,12 @@ public class FhirOwlService {
     if (purpose != null) {
       cs.setPurpose(purpose);
     }
+  
+    // Jurisdictions
+    final List<CodeableConcept> jurisdictions = csp.getJurisdictions();
+    if (!jurisdictions.isEmpty()) {
+      cs.setJurisdiction(jurisdictions);
+    }
     
     // Copyright
     final String copyright = csp.getCopyright();
@@ -446,9 +453,14 @@ public class FhirOwlService {
     // Value set
     final String valueset = csp.getValueSet();
     cs.setValueSet(Objects.requireNonNullElseGet(valueset, () -> createVsUrl(cs.getUrl())));
-    
-    // Hierarchy meaning - always is-a for OWL ontologies
-    cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
+  
+    // HierarchyMeaning
+    final String hierarchyMeaning = csp.getHierarchyMeaning();
+    if (hierarchyMeaning != null) {
+      cs.setHierarchyMeaning(CodeSystem.CodeSystemHierarchyMeaning.fromCode(hierarchyMeaning));
+    } else {
+      cs.setHierarchyMeaning(CodeSystemHierarchyMeaning.ISA);
+    }
     
     // Compositional
     cs.setCompositional(csp.isCompositional());
@@ -871,7 +883,7 @@ public class FhirOwlService {
       String label = iriDisplayMap.get(iri);
       if (label != null) {
         cdc.setDisplay(label);
-      } else {
+      } else if(!cdc.hasDisplay()) {
         cdc.setDisplay(code);
       }
     } else if (preferredTerm == null) {

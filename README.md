@@ -57,7 +57,7 @@ The following options are available:
 | -c                 | string      | Indicates which annotation property contains the concepts' codes. If the value is not set, then the IRI of the class is used. If the class is imported then the full IRI is used. If the class is defined in the ontology then the short form is used. |
 | -codeReplace       | string      | Two strings separated by a comma. Replaces the first string with the second string in all local codes. |
 | -compositional     | boolean     | Flag to indicate if the code system defines a post-coordination grammar. |
-| -contact           | string      | Comma-separated list of contact details for the publisher. Each contact detail has the format [name|system|value], where system has the following possible values: *phone*, *fax*, *email*, *pager*, *url*, *sms* or *other*. |
+| -contact           | string      | Comma-separated list of contact details for the publisher. Each contact detail has the format [name\|system\|value], where system has the following possible values: *phone*, *fax*, *email*, *pager*, *url*, *sms* or *other*. |
 | -content           | string      | The extent of the content in this resource. Valid values are *not-present*, *example*, *fragment*, *complete* and *supplement*. Defaults to *complete*. The actual value does not affect the output of the transformation. |
 | -copyright         | string      | A copyright statement about the code system. |
 | -d                 | string      | Indicates which annotation property contains the concepts' displays. Default is RDFS:label. |
@@ -67,10 +67,12 @@ The following options are available:
 | -descriptionProp   | string      | Comma-separated list of OWL annotation properties that contain the code system description. |
 | -experimental      | boolean     | Indicates if the code system is for testing purposes or real usage. |
 | -help              | none        | Print the help message. |
+| -hierarchyMeaning  | string      | The meaning of the hierarchy of concepts as represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  Default is *is-a*. | 
 | -i                 | string      | The input OWL file. |
 | -id                | string      | The technical id of the code system. Required if using PUT to upload the resource to a FHIR server. |
-| -identifier        | string      | Comma-separated list of additional business identifiers. Each business identifer has the format [system]|[value]. |
+| -identifier        | string      | Comma-separated list of additional business identifiers. Each business identifer has the format [system]\|[value]. |
 | -includeDeprecated | boolean     | Include all OWL classes, including deprecated ones. |
+| -jurisdiction      | string      | Comma-separated list of jurisdictions for the codesystem. Each jurisdiction must have the format [system\|code\|display], with values retrieved from the [FHIR Jurisdiction ValueSet](https://hl7.org/fhir/valueset-jurisdiction.html). |
 | -labelsToExclude   | string      | Comma-separated list of class labels to exclude. |
 | -language          | string      | The language of the content. This is a code from the [FHIR Common Languages value set](https://www.hl7.org/fhir/valueset-languages.html). |
 | - mainNs           | string      | Comma-separated list of namespace prefixes that determine which classes are part of the main ontology. |

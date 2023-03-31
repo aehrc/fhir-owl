@@ -56,7 +56,7 @@ public class Application implements CommandLineRunner {
   
   /**
    * Returns a GSON bean, with a custom serialiser for {@link Bundle}s.
-   * 
+   *
    * @return A bean that contains the GSON instance.
    */
   @Bean
@@ -68,7 +68,7 @@ public class Application implements CommandLineRunner {
   
   /**
    * Main method.
-   * 
+   *
    * @param args Arguments.
    */
   public static void main(String[] args) {
@@ -163,6 +163,10 @@ public class Application implements CommandLineRunner {
     options.addOption("experimental", false, "Indicates if the code system is for testing "
         + "purposes or real usage.");
     
+    options.addOption("hierarchyMeaning", true, "The meaning of the hierarchy of concepts as "
+        + "represented in this resource. Valid values are *grouped-by*, *is-a*, *part-of*, and *classified-with*.  "
+        + "Default is *is-a*.");
+    
     options.addOption(
         Option.builder("i")
         .required(true)
@@ -177,6 +181,10 @@ public class Application implements CommandLineRunner {
     
     options.addOption("identifier", true, "Comma-separated list of additional business "
         + "identifiers. Each business identifer has the format [system]|[value].");
+    
+    options.addOption("jurisdiction", true, "Comma-separated list of jurisdictions for the codesystem. "
+        + "Each jurisdiction must have the format [code|system|display], with values retrieved from the "
+        + "[FHIR Jurisdiction ValueSet](https://hl7.org/fhir/valueset-jurisdiction.html)");
     
     options.addOption("includeDeprecated", false, "Include all OWL classes, including deprecated "
         + "ones.");
@@ -221,7 +229,10 @@ public class Application implements CommandLineRunner {
         + "retired and unknown");
     
     options.addOption("t", "title", true, "A human-friendly name for the code system.");
-    
+  
+    options.addOption("test", false, "Whether to keep the spring application up for the sake of allowing " 
+        + "assertion test cases to be run after the transform process finishes");
+  
     options.addOption("url", true, "Canonical identifier of the code system. If this option is"
         + " not specified then the ontology’s IRI will be used. If the ontology has no IRI then "
         + "the transformation fails.");
@@ -271,19 +282,25 @@ public class Application implements CommandLineRunner {
         } else {
           fhirOwlService.transform(csp, cp);
         }
+        
+//   Only used to keep the application context up for the sake of allowing assertions in tests.  
+//   Finishing the test cases exits the process, so there shouldn't be a case where this is left open indefinitely.
+        if (!line.hasOption("test")) {
+          exit(0);
+        }
       } catch (Throwable t) {
-        System.out.println("There was a problem transforming the OWL file into FHIR: " 
+        System.out.println("There was a problem transforming the OWL file into FHIR: "
             + t.getLocalizedMessage());
         t.printStackTrace();
+        exit(0);
       }
       
     } catch (ParseException exp) {
       // oops, something went wrong
       System.out.println(exp.getMessage());
       printUsage(options);
+      exit(0);
     }
-    
-    exit(0);
   }
   
   private ConceptProperties loadConceptProperties(CommandLine line) {
@@ -411,10 +428,20 @@ public class Application implements CommandLineRunner {
     if (val != null) {
       res.setDescriptionProps(val);
     }
+    
+    val = line.getOptionValue("jurisdiction");
+    if (val != null) {
+      res.setJurisdiction(val);
+    }
 
     val = line.getOptionValue("purpose");
     if (val != null) {
       res.setPurpose(val);
+    }
+    
+    val = line.getOptionValue("hierarchyMeaning");
+    if (val != null) {
+      res.setHierarchyMeaning(val);
     }
     
     val = line.getOptionValue("copyright");

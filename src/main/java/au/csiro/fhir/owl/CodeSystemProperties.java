@@ -10,7 +10,10 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import org.hl7.fhir.r4.model.CodeableConcept;
+import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.ContactDetail;
+import org.hl7.fhir.r4.model.ContactPoint;
 import org.hl7.fhir.r4.model.Identifier;
 import org.semanticweb.owlapi.model.OWLAnnotationProperty;
 import org.semanticweb.owlapi.model.OWLDataFactory;
@@ -41,9 +44,11 @@ public class CodeSystemProperties extends OwlProperties {
   private String publisher = null;
   private final List<String> publisherProps = new ArrayList<>();
   private final List<ContactDetail> contacts = new ArrayList<>();
+  private final List<CodeableConcept> jurisdictions = new ArrayList<>();
   private String description = null;
   private final List<String> descriptionProps = new ArrayList<>();
   private String purpose = null;
+  private String hierarchyMeaning = null;
   private String copyright = null;
   private String valueSet = null;
   private boolean compositional = false;
@@ -193,9 +198,46 @@ public class CodeSystemProperties extends OwlProperties {
         throw new InvalidPropertyException("Invalid system contact '" + parts[1] 
             + "'. Valid values are: " + contactSystemValues);
       }
+      
+      ContactDetail contactDetail = new ContactDetail();
+      contactDetail.setName(parts[0]);
+      ContactPoint contactPoint = new ContactPoint();
+      contactPoint.setSystem(ContactPoint.ContactPointSystem.fromCode(parts[1]));
+      contactPoint.setValue(parts[2]);
+      contactDetail.addTelecom(contactPoint);
+      contacts.add(contactDetail);
     }
   }
-
+  
+  /**
+   * Parses the arguments of the jurisdiction parameter.
+   *
+   * @param jds The string that contains the jurisdiction information.
+   * @throws InvalidPropertyException If the string is not well formed.
+   */
+  public void setJurisdiction(String jds) {
+    for (String jd : jds.split("[,]")) {
+      String[] parts = jd.split("[|]");
+      if (parts.length != 3) {
+        throw new InvalidPropertyException("Invalid jurisdiction '" + jd
+                                               + "'. Valid format is [system|code|display] from https://hl7.org/fhir/valueset-jurisdiction.html.");
+      }
+      CodeableConcept jurisdiction = new CodeableConcept();
+      jurisdiction.addCoding(new Coding(parts[0], parts[1], parts[2]));
+      jurisdictions.add(jurisdiction);
+    }
+  }
+  
+  /**
+   * Returns the jurisdictions property.
+   *
+   * @return the jurisdictions
+   */
+  public List<CodeableConcept> getJurisdictions() {
+    return jurisdictions;
+  }
+  
+  
   /**
    * Returns the content property.
    *
@@ -456,6 +498,24 @@ public class CodeSystemProperties extends OwlProperties {
    */
   public void setPurpose(String purpose) {
     this.purpose = purpose;
+  }
+  
+  /**
+   * Returns the hierarchyMeaning.
+   *
+   * @return the hierarchyMeaning
+   */
+  public String getHierarchyMeaning() {
+    return hierarchyMeaning;
+  }
+  
+  /**
+   * Sets the hierarchyMeaning.
+   *
+   * @param hierarchyMeaning the hierarchyMeaning to set
+   */
+  public void setHierarchyMeaning(String hierarchyMeaning) {
+    this.hierarchyMeaning = hierarchyMeaning;
   }
 
   /**
