@@ -15,12 +15,16 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+
+import java.net.URL;
+import java.net.URLClassLoader;
 
 import javax.annotation.PostConstruct;
 
@@ -55,6 +59,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uk.ac.manchester.cs.jfact.JFactFactory;
 
+import org.springframework.util.ResourceUtils;
+
 /**
  * Main service.
  * 
@@ -88,26 +94,53 @@ public class FhirOwlService {
     log.info("Checking for IRI mappings in home directory " + System.getProperty("user.home"));
     InputStream input;
     try {
-      input = FhirContext.class.getClassLoader().getResourceAsStream("iri_mappings.txt");
-      if (input == null) {
-        log.info("Did not find iri_mappings.txt in classpath.");
-        return;
+      String userDirPath = System.getProperty("user.dir") + "/iri_mappings.txt";
+      String userHomePath = System.getProperty("user.home") + "/iri_mappings.txt";
+      File mappingFile = new File(userDirPath);
+      if (!mappingFile.exists()) {
+        mappingFile = new File(userHomePath);
       }
-      
+      if (mappingFile.exists()) {
+	input = new FileInputStream(mappingFile);
+	log.info("Found IRI mappings at:" + mappingFile.getAbsolutePath());
+      }
+      else {
+	log.info("not found in " + userHomePath);
+        input = FhirContext.class.getClassLoader().getResourceAsStream("iri_mappings.txt");
+        if (input != null) {
+          log.warn("Found IRI mappings in the jar. They may not be appropriate here.");
+	}
+      }
+
+      if (input == null) {
+        log.info("Did not find iri_mappings.txt in " + userDirPath + " or " + userHomePath + " or in the jar.");
+        return;
+      } 
+     
       final String[] lines = getLinesFromInputStream(input);
       for (String line : lines) {
-        if (line.startsWith("#")) {
+        if (line.startsWith("#") || line.trim().length() ==0) {
           continue;
         }
         String[] parts = line.split("[,]");
         
-        // Check file exists
-        final File tgtFile = new File(System.getProperty("user.home") + parts[1]);
+        // Check file exists 
+        final File tgtFile;
+	try {
+       	    tgtFile = new File(System.getProperty("user.home") + parts[1]);
+	}
+	catch (Exception x) {
+            log.error("Mapping file not parsed right: \"" + line + "\"");
+	    throw(x);
+        }	
         if (tgtFile.exists()) {
           iriMap.put(IRI.create(parts[0]), IRI.create(tgtFile));
           log.info("Adding mapping " + parts[0] + " -> " +  tgtFile.toString());
         } else {
           log.warn("Mapping was not added because file " +  tgtFile.toString() + " does not exist.");
+          log.info("...details home:" + System.getProperty("user.home") + " file:" +  parts[1]);
+          log.info("...edit the iri_mappings.txt file to accurately locate these files.");
+          log.info("...location of iri_mappings.txt should be in classpath. A copy exists at src/main/resources/iri_mappings.txt.");
         }
       }
       
@@ -198,7 +231,14 @@ public class FhirOwlService {
     log.info("Loading ontology from file " + input.getAbsolutePath());
     OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
     addIriMappings(manager);
-    final OWLOntology rootOnt = manager.loadOntologyFromOntologyDocument(input);
+    final OWLOntology rootOnt;
+    try {
+       rootOnt = manager.loadOntologyFromOntologyDocument(input);
+    }
+    catch(Exception e) {
+        System.out.println("NOT FOUND: " + input);
+        throw e;
+    }
     
     // We only need the preferred term property here
     final OWLDataFactory factory = manager.getOWLDataFactory();
